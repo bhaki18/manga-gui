@@ -17,8 +17,10 @@ public partial class MediaItem : ObservableObject
     [JsonPropertyName("url")]
     public string? Url { get; set; }
 
-    [JsonPropertyName("image")]
-    public string? Image { get; set; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasImage))]
+    [property: JsonPropertyName("image")]
+    private string? _image;
 
     [JsonPropertyName("type")]
     public string Type { get; set; } = "anime"; // "anime" or "manga"

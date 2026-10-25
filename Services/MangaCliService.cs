@@ -4,74 +4,35 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using MangaGui.Models;
 
 namespace MangaGui.Services;
 
-public class StreamInfoResponse
-{
-    [JsonPropertyName("success")]
-    public bool Success { get; set; }
-
-    [JsonPropertyName("streamUrl")]
-    public string? StreamUrl { get; set; }
-
-    [JsonPropertyName("title")]
-    public string? Title { get; set; }
-
-    [JsonPropertyName("episode")]
-    public string? Episode { get; set; }
-
-    [JsonPropertyName("referer")]
-    public string? Referer { get; set; }
-
-    [JsonPropertyName("error")]
-    public string? Error { get; set; }
-}
-
-public class ChapterInfoResponse
-{
-    [JsonPropertyName("success")]
-    public bool Success { get; set; }
-
-    [JsonPropertyName("pages")]
-    public List<string> Pages { get; set; } = new();
-
-    [JsonPropertyName("title")]
-    public string? Title { get; set; }
-
-    [JsonPropertyName("chapter")]
-    public string? Chapter { get; set; }
-
-    [JsonPropertyName("referer")]
-    public string? Referer { get; set; }
-
-    [JsonPropertyName("error")]
-    public string? Error { get; set; }
-}
-
-public class MediaDetailsResponse
-{
-    [JsonPropertyName("success")]
-    public bool Success { get; set; }
-
-    [JsonPropertyName("total")]
-    public int Total { get; set; } = 1;
-
-    [JsonPropertyName("type")]
-    public string? Type { get; set; }
-}
-
 public class MangaCliService
 {
     private readonly string _cliScriptPath;
+    private static readonly string _historyFile;
+
+    static MangaCliService()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        _historyFile = Path.Combine(home, ".local", "state", "manga-cli", "history.json");
+    }
 
     public MangaCliService()
     {
-        var localCli = "/home/adp/Desktop/manga-cli/src/cli.js";
-        _cliScriptPath = File.Exists(localCli) ? localCli : "manga-cli";
+        var baseDir = AppContext.BaseDirectory;
+        var candidates = new[]
+        {
+            Path.Combine(baseDir, "cli", "src", "cli.js"),
+            Path.Combine(baseDir, "..", "..", "..", "cli", "src", "cli.js"),
+            Path.Combine(Directory.GetCurrentDirectory(), "cli", "src", "cli.js"),
+            "/home/adp/Desktop/manga-gui/cli/src/cli.js"
+        };
+
+        _cliScriptPath = candidates.FirstOrDefault(File.Exists) ?? "manga-cli";
     }
 
     private async Task<string> RunCommandAsync(string arguments)
@@ -88,6 +49,11 @@ public class MangaCliService
         {
             psi.FileName = "node";
             psi.Arguments = $"\"{_cliScriptPath}\" {arguments}";
+            var cliDir = Path.GetDirectoryName(Path.GetDirectoryName(_cliScriptPath));
+            if (!string.IsNullOrEmpty(cliDir) && Directory.Exists(cliDir))
+            {
+                psi.WorkingDirectory = cliDir;
+            }
         }
         else
         {
@@ -106,78 +72,18 @@ public class MangaCliService
         return output.Trim();
     }
 
-    public async Task<List<MediaItem>> GetHistoryAsync()
-    {
-        try
-        {
-            var json = await RunCommandAsync("--history --json");
-            return JsonSerializer.Deserialize<List<MediaItem>>(json) ?? new List<MediaItem>();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error fetching history: {ex.Message}");
-            return new List<MediaItem>();
-        }
-    }
-
-    public async Task<bool> UnmarkItemAsync(MediaItem item, int number)
-    {
-        try
-        {
-            var target = !string.IsNullOrWhiteSpace(item.Url) ? item.Url : (!string.IsNullOrWhiteSpace(item.Id) ? item.Id : item.Title);
-            var typeArg = !string.IsNullOrWhiteSpace(item.Type) ? $"--type {item.Type.ToLower()}" : "";
-            var json = await RunCommandAsync($"unmark --url \"{target}\" --number {number} {typeArg} --json");
-            using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.TryGetProperty("success", out var succ) && succ.GetBoolean();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error unmarking item: {ex.Message}");
-            return false;
-        }
-    }
-
-    public async Task<bool> RemoveFromHistoryAsync(MediaItem item)
-    {
-        try
-        {
-            var target = !string.IsNullOrWhiteSpace(item.Url) ? item.Url : (!string.IsNullOrWhiteSpace(item.Id) ? item.Id : item.Title);
-            var typeArg = !string.IsNullOrWhiteSpace(item.Type) ? $"--type {item.Type.ToLower()}" : "";
-            var json = await RunCommandAsync($"remove-history --url \"{target}\" {typeArg} --json");
-            using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.TryGetProperty("success", out var succ) && succ.GetBoolean();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error removing from history: {ex.Message}");
-            return false;
-        }
-    }
-
-    public async Task<int> GetMediaDetailsAsync(MediaItem item)
-    {
-        try
-        {
-            var urlArg = !string.IsNullOrWhiteSpace(item.Url) ? $"--url \"{item.Url}\"" : "";
-            var srcArg = !string.IsNullOrWhiteSpace(item.Source) && item.Source != "all" ? $"--source {item.Source}" : "";
-            var json = await RunCommandAsync($"media-details {urlArg} {srcArg} --json");
-            var details = JsonSerializer.Deserialize<MediaDetailsResponse>(json);
-            return details != null && details.Total > 0 ? details.Total : 1;
-        }
-        catch
-        {
-            return 1;
-        }
-    }
-
     public async Task<List<MediaItem>> GetAnimeCatalogAsync(string? source = null)
     {
         try
         {
-            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
-            var json = await RunCommandAsync($"catalog anime {srcArg} --json");
-            var res = JsonSerializer.Deserialize<CatalogResponse>(json);
-            return res?.Anime ?? new List<MediaItem>();
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" 
+                ? $"-s \"{source}\"" : "";
+            var output = await RunCommandAsync($"--catalog-anime {srcArg} --list");
+            var items = ParseCatalogOutput(output, "anime");
+
+            EnrichCoversAsync(items, "anime");
+
+            return items;
         }
         catch (Exception ex)
         {
@@ -190,10 +96,14 @@ public class MangaCliService
     {
         try
         {
-            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
-            var json = await RunCommandAsync($"catalog manga {srcArg} --json");
-            var res = JsonSerializer.Deserialize<CatalogResponse>(json);
-            return res?.Manga ?? new List<MediaItem>();
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" 
+                ? $"-s \"{source}\"" : "";
+            var output = await RunCommandAsync($"--catalog-manga {srcArg} --list");
+            var items = ParseCatalogOutput(output, "manga");
+
+            EnrichCoversAsync(items, "manga");
+
+            return items;
         }
         catch (Exception ex)
         {
@@ -206,9 +116,14 @@ public class MangaCliService
     {
         try
         {
-            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
-            var json = await RunCommandAsync($"\"{query}\" -a {srcArg} --json");
-            return JsonSerializer.Deserialize<List<MediaItem>>(json) ?? new List<MediaItem>();
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" 
+                ? $"-s \"{source}\"" : "";
+            var output = await RunCommandAsync($"\"{query}\" -a {srcArg} --list");
+            var items = ParseSearchOutput(output, "anime");
+
+            EnrichCoversAsync(items, "anime");
+
+            return items;
         }
         catch (Exception ex)
         {
@@ -221,10 +136,15 @@ public class MangaCliService
     {
         try
         {
-            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" 
+                ? $"-s \"{source}\"" : "";
             var langArg = !string.IsNullOrWhiteSpace(lang) ? $"-l {lang}" : "-l it";
-            var json = await RunCommandAsync($"\"{query}\" -m {srcArg} {langArg} --json");
-            return JsonSerializer.Deserialize<List<MediaItem>>(json) ?? new List<MediaItem>();
+            var output = await RunCommandAsync($"\"{query}\" -m {srcArg} {langArg} --list");
+            var items = ParseSearchOutput(output, "manga");
+
+            EnrichCoversAsync(items, "manga");
+
+            return items;
         }
         catch (Exception ex)
         {
@@ -233,23 +153,40 @@ public class MangaCliService
         }
     }
 
+    public async Task<int> GetMediaDetailsAsync(MediaItem item)
+    {
+        try
+        {
+            var typeArg = item.Type.ToLower() == "manga" ? "-m -l it" : "-a";
+            var output = await RunCommandAsync($"\"{item.Title}\" {typeArg} -i");
+            var m = Regex.Match(output, @"Total\s+(?:episodes|chapters):\s*(\d+)", RegexOptions.IgnoreCase);
+            if (m.Success && int.TryParse(m.Groups[1].Value, out var total) && total > 0)
+            {
+                return total;
+            }
+            return 1;
+        }
+        catch
+        {
+            return 1;
+        }
+    }
+
     public async Task<(bool success, string message)> PlayStreamAsync(MediaItem item, int episode)
     {
         try
         {
-            var srcArg = !string.IsNullOrWhiteSpace(item.Source) && item.Source != "all" ? $"--source {item.Source}" : "";
-            var urlArg = !string.IsNullOrWhiteSpace(item.Url) ? $"--url \"{item.Url}\"" : "";
+            var output = await RunCommandAsync($"\"{item.Title}\" -a -e {episode} --get-url");
+            var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var streamUrl = lines.FirstOrDefault(l => l.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
+                                                      l.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
 
-            var json = await RunCommandAsync($"stream-info {urlArg} --episode {episode} {srcArg} --json");
-            var info = JsonSerializer.Deserialize<StreamInfoResponse>(json);
-
-            if (info != null && info.Success && !string.IsNullOrWhiteSpace(info.StreamUrl))
+            if (!string.IsNullOrWhiteSpace(streamUrl))
             {
-                var refHeader = !string.IsNullOrWhiteSpace(info.Referer) ? $"--referrer=\"{info.Referer}\"" : "";
                 var mpvPsi = new ProcessStartInfo
                 {
                     FileName = "mpv",
-                    Arguments = $"\"{info.StreamUrl}\" --title=\"{item.Title} - Episodio {episode}\" --force-window=immediate {refHeader}",
+                    Arguments = $"\"{streamUrl.Trim()}\" --title=\"{item.Title} - Episodio {episode}\" --force-window=immediate",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -260,7 +197,7 @@ public class MangaCliService
                 return (true, $"In riproduzione: {item.Title} (Episodio {episode})");
             }
 
-            return (false, info?.Error ?? "Impossibile estrarre il flusso video per questo episodio.");
+            return (false, "Impossibile estrarre l'indirizzo del video per questo episodio.");
         }
         catch (Exception ex)
         {
@@ -272,15 +209,16 @@ public class MangaCliService
     {
         try
         {
-            var srcArg = !string.IsNullOrWhiteSpace(item.Source) && item.Source != "all" ? $"--source {item.Source}" : "";
-            var urlArg = !string.IsNullOrWhiteSpace(item.Url) ? $"--url \"{item.Url}\"" : "";
+            var output = await RunCommandAsync($"\"{item.Title}\" -m -l it -C {chapter} --get-url");
+            var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var pages = lines.Where(l => l.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
+                                         l.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                             .Select(l => l.Trim())
+                             .ToList();
 
-            var json = await RunCommandAsync($"chapter-info {urlArg} --chapter {chapter} {srcArg} --json");
-            var info = JsonSerializer.Deserialize<ChapterInfoResponse>(json);
-
-            if (info != null && info.Success && info.Pages != null && info.Pages.Count > 0)
+            if (pages.Count > 0)
             {
-                var pagesArgs = string.Join(" ", info.Pages.Select(p => $"\"{p}\""));
+                var pagesArgs = string.Join(" ", pages.Select(p => $"\"{p}\""));
                 var mpvPsi = new ProcessStartInfo
                 {
                     FileName = "mpv",
@@ -292,10 +230,10 @@ public class MangaCliService
                 };
                 PassDisplayEnv(mpvPsi);
                 Process.Start(mpvPsi);
-                return (true, $"Aperto lettore: {item.Title} (Capitolo {chapter} - {info.Pages.Count} pagine)");
+                return (true, $"Aperto lettore: {item.Title} (Capitolo {chapter} - {pages.Count} pagine)");
             }
 
-            return (false, info?.Error ?? "Nessuna pagina trovata per questo capitolo.");
+            return (false, "Nessuna pagina trovata per questo capitolo.");
         }
         catch (Exception ex)
         {
@@ -303,7 +241,206 @@ public class MangaCliService
         }
     }
 
-    private void PassDisplayEnv(ProcessStartInfo psi)
+    public async Task<List<MediaItem>> GetHistoryAsync()
+    {
+        var list = new List<MediaItem>();
+        try
+        {
+            if (!File.Exists(_historyFile)) return list;
+
+            var raw = await File.ReadAllTextAsync(_historyFile);
+            using var doc = JsonDocument.Parse(raw);
+
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                var val = prop.Value;
+                var isAnime = prop.Name.StartsWith("anime:") || 
+                              (val.TryGetProperty("mediaType", out var mt) && mt.GetString() == "anime");
+
+                var item = new MediaItem
+                {
+                    Id = prop.Name,
+                    Title = val.TryGetProperty("title", out var t) ? t.GetString() ?? prop.Name : prop.Name,
+                    Url = val.TryGetProperty("url", out var u) ? u.GetString() : prop.Name,
+                    Source = val.TryGetProperty("source", out var s) ? s.GetString() ?? "" : "",
+                    SourceName = val.TryGetProperty("source", out var sn) ? sn.GetString() ?? "" : "",
+                    Language = val.TryGetProperty("language", out var lang) ? lang.GetString() ?? "it" : "it",
+                    Type = isAnime ? "anime" : "manga",
+                    LastAccessedAt = isAnime ? 
+                        (val.TryGetProperty("lastWatchedAt", out var lw) ? lw.GetString() : null) :
+                        (val.TryGetProperty("lastReadAt", out var lr) ? lr.GetString() : null)
+                };
+
+                var numbers = new List<int>();
+                var arrayName = isAnime ? "watchedEpisodes" : "readChapters";
+
+                if (val.TryGetProperty(arrayName, out var arr) && arr.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var elem in arr.EnumerateArray())
+                    {
+                        var idStr = elem.TryGetProperty("id", out var idProp) ? idProp.GetString() : null;
+                        var titleStr = elem.TryGetProperty("title", out var tProp) ? tProp.GetString() : null;
+                        var num = ExtractNumber(idStr) ?? ExtractNumber(titleStr);
+                        if (num.HasValue) numbers.Add(num.Value);
+                    }
+                }
+
+                item.WatchedNumbers = numbers.Distinct().OrderBy(n => n).ToList();
+                item.Count = item.WatchedNumbers.Count;
+                item.UpdateWatchedSummary();
+                item.Image = await CoverService.GetCoverAsync(item.Title, item.Type);
+
+                list.Add(item);
+            }
+
+            list = list.OrderByDescending(i => DateTime.TryParse(i.LastAccessedAt, out var dt) ? dt : DateTime.MinValue).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error reading history: {ex.Message}");
+        }
+
+        return list;
+    }
+
+    public async Task<bool> UnmarkItemAsync(MediaItem item, int number)
+    {
+        try
+        {
+            var typeFlag = item.Type.ToLower() == "manga" ? "-m" : "-a";
+            var output = await RunCommandAsync($"\"{item.Title}\" {typeFlag} --unmark {number}");
+            return output.Contains("✔ Unmarked", StringComparison.OrdinalIgnoreCase) || 
+                   output.Contains("Unmarked", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<bool> RemoveFromHistoryAsync(MediaItem item)
+    {
+        try
+        {
+            var typeFlag = item.Type.ToLower() == "manga" ? "-m" : "-a";
+            var output = await RunCommandAsync($"\"{item.Title}\" {typeFlag} --remove-history");
+            return output.Contains("✔ Successfully removed", StringComparison.OrdinalIgnoreCase) || 
+                   output.Contains("removed", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void EnrichCoversAsync(List<MediaItem> items, string type)
+    {
+        _ = Task.Run(async () =>
+        {
+            using var semaphore = new System.Threading.SemaphoreSlim(6);
+            var tasks = items.Select(async item =>
+            {
+                await semaphore.WaitAsync();
+                try
+                {
+                    var cover = await CoverService.GetCoverAsync(item.Title, type);
+                    if (!string.IsNullOrWhiteSpace(cover))
+                    {
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        {
+                            item.Image = cover;
+                        });
+                    }
+                }
+                catch {}
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+            await Task.WhenAll(tasks);
+        });
+    }
+
+    private static List<MediaItem> ParseCatalogOutput(string output, string type)
+    {
+        var list = new List<MediaItem>();
+        var currentSource = type == "anime" ? "One Piece Power Anime" : "One Piece Power";
+        var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            var srcMatch = Regex.Match(line, @"📂\s*\[(.*?)\]");
+            if (srcMatch.Success)
+            {
+                currentSource = srcMatch.Groups[1].Value.Trim();
+                continue;
+            }
+
+            var itemMatch = Regex.Match(line, @"^\s*\d+\.\s+(.*?)(?:\s+\[(.*?)\])?$");
+            if (itemMatch.Success)
+            {
+                var title = itemMatch.Groups[1].Value.Trim();
+                var tag = itemMatch.Groups[2].Success ? itemMatch.Groups[2].Value.Trim() : "";
+
+                list.Add(new MediaItem
+                {
+                    Title = title,
+                    Type = type,
+                    Audio = tag,
+                    Source = currentSource.ToLower().Replace(" ", ""),
+                    SourceName = currentSource
+                });
+            }
+        }
+
+        return list;
+    }
+
+    private static List<MediaItem> ParseSearchOutput(string output, string type)
+    {
+        var list = new List<MediaItem>();
+        var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            var m = Regex.Match(line, @"^\s*-\s+(.*?)(?:\s+\[(.*?)\])?(?:\s+\[(.*?)\])?$");
+            if (m.Success)
+            {
+                var title = m.Groups[1].Value.Trim();
+                var tag1 = m.Groups[2].Success ? m.Groups[2].Value.Trim() : "";
+                var tag2 = m.Groups[3].Success ? m.Groups[3].Value.Trim() : "";
+
+                var audio = tag1;
+                var source = !string.IsNullOrWhiteSpace(tag2) ? tag2 : "One Piece Power";
+
+                list.Add(new MediaItem
+                {
+                    Title = title,
+                    Type = type,
+                    Audio = audio,
+                    Source = source.ToLower().Replace(" ", ""),
+                    SourceName = source
+                });
+            }
+        }
+
+        return list;
+    }
+
+    private static int? ExtractNumber(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        var m = Regex.Match(s, @"\b(\d+)\b");
+        if (m.Success && int.TryParse(m.Groups[1].Value, out var n))
+        {
+            return n;
+        }
+        return null;
+    }
+
+    private static void PassDisplayEnv(ProcessStartInfo psi)
     {
         var display = Environment.GetEnvironmentVariable("DISPLAY");
         if (!string.IsNullOrEmpty(display)) psi.Environment["DISPLAY"] = display;
