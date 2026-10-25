@@ -54,25 +54,7 @@
                             Foreground="{Binding MangaTabColor}"
                             Cursor="Hand" />
 
-                    <Button Content="Popolari" 
-                            Command="{Binding LoadCatalogCommand}"
-                            Background="Transparent"
-                            BorderThickness="0"
-                            Padding="0"
-                            FontSize="14"
-                            FontWeight="SemiBold"
-                            Foreground="#A0A0A0"
-                            Cursor="Hand" />
 
-                    <Button Content="Simulcast" 
-                            Command="{Binding LoadCatalogCommand}"
-                            Background="Transparent"
-                            BorderThickness="0"
-                            Padding="0"
-                            FontSize="14"
-                            FontWeight="SemiBold"
-                            Foreground="#A0A0A0"
-                            Cursor="Hand" />
 
                     <!-- Source Selector -->
                     <ComboBox ItemsSource="{Binding Sources}" 
@@ -153,19 +135,11 @@
 
             <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="40,25">
                 <StackPanel Spacing="16">
-                    <!-- PAGE HEADER (MOST POPULAR ANIME + FILTER) -->
-                    <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Grid.Column="0" 
-                                   Text="{Binding PageHeaderTitle}" 
-                                   FontSize="28" 
-                                   FontWeight="Bold" 
-                                   Foreground="#FFFFFF"/>
-
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="24" VerticalAlignment="Center">
-                            <TextBlock Text="≡ POPULARITY" FontSize="12" FontWeight="Bold" Foreground="#A0A0A0" VerticalAlignment="Center" Cursor="Hand"/>
-                            <TextBlock Text="⎇ FILTER" FontSize="12" FontWeight="Bold" Foreground="#A0A0A0" VerticalAlignment="Center" Cursor="Hand"/>
-                        </StackPanel>
-                    </Grid>
+                    <!-- PAGE HEADER -->
+                    <TextBlock Text="{Binding PageHeaderTitle}" 
+                               FontSize="28" 
+                               FontWeight="Bold" 
+                               Foreground="#FFFFFF"/>
 
                     <!-- SUB-HEADER CATEGORY -->
                     <TextBlock Text="{Binding PageSubHeader}" FontSize="16" FontWeight="SemiBold" Foreground="#FFFFFF" Margin="0,10,0,8"/>
@@ -289,11 +263,14 @@
                                 <NumericUpDown Value="{Binding SelectedNumber}" 
                                                Minimum="1" 
                                                Maximum="{Binding MaxNumber}" 
-                                               Width="95" 
+                                               FormatString="0"
+                                               MinWidth="120"
+                                               HorizontalContentAlignment="Center"
                                                CornerRadius="4"
                                                Background="#141519"
                                                BorderBrush="#333333"
-                                               Foreground="#FFFFFF"/>
+                                               Foreground="#FFFFFF"
+                                               FontSize="13"/>
                                 <TextBlock Text="{Binding MaxNumber, StringFormat='di {0}'}" 
                                            Foreground="#A0A0A0" 
                                            FontSize="12" 

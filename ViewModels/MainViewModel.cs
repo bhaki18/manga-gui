@@ -35,7 +35,7 @@ public partial class MainViewModel : ViewModelBase
     private int _maxNumber = 1;
 
     [ObservableProperty]
-    private string _selectedSource = "all";
+    private string _selectedSource = "Tutte le fonti";
 
     public string ActionButtonText => SelectedItem?.Type.ToLower() == "manga" ? "📖 LEGGI ORA" : "▶ INIZIA A GUARDARE";
     public string NumberLabel => SelectedItem?.Type.ToLower() == "manga" ? "Capitolo:" : "Episodio:";
@@ -78,6 +78,14 @@ public partial class MainViewModel : ViewModelBase
     {
         _cliService = new MangaCliService();
         _ = LoadInitialCatalogAsync();
+    }
+
+    partial void OnSelectedSourceChanged(string value)
+    {
+        if (ActiveTab != "Cronologia")
+        {
+            _ = LoadCatalogAsync();
+        }
     }
 
     partial void OnActiveTabChanged(string value)
