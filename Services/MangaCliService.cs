@@ -120,6 +120,40 @@ public class MangaCliService
         }
     }
 
+    public async Task<bool> UnmarkItemAsync(MediaItem item, int number)
+    {
+        try
+        {
+            var target = !string.IsNullOrWhiteSpace(item.Url) ? item.Url : (!string.IsNullOrWhiteSpace(item.Id) ? item.Id : item.Title);
+            var typeArg = !string.IsNullOrWhiteSpace(item.Type) ? $"--type {item.Type.ToLower()}" : "";
+            var json = await RunCommandAsync($"unmark --url \"{target}\" --number {number} {typeArg} --json");
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.TryGetProperty("success", out var succ) && succ.GetBoolean();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error unmarking item: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<bool> RemoveFromHistoryAsync(MediaItem item)
+    {
+        try
+        {
+            var target = !string.IsNullOrWhiteSpace(item.Url) ? item.Url : (!string.IsNullOrWhiteSpace(item.Id) ? item.Id : item.Title);
+            var typeArg = !string.IsNullOrWhiteSpace(item.Type) ? $"--type {item.Type.ToLower()}" : "";
+            var json = await RunCommandAsync($"remove-history --url \"{target}\" {typeArg} --json");
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.TryGetProperty("success", out var succ) && succ.GetBoolean();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error removing from history: {ex.Message}");
+            return false;
+        }
+    }
+
     public async Task<int> GetMediaDetailsAsync(MediaItem item)
     {
         try

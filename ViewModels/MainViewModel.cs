@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -38,6 +39,10 @@ public partial class MainViewModel : ViewModelBase
 
     public string ActionButtonText => SelectedItem?.Type.ToLower() == "manga" ? "📖 LEGGI ORA" : "▶ INIZIA A GUARDARE";
     public string NumberLabel => SelectedItem?.Type.ToLower() == "manga" ? "Capitolo:" : "Episodio:";
+
+    public bool IsCurrentNumberWatched => SelectedItem != null && SelectedItem.WatchedNumbers != null && SelectedItem.WatchedNumbers.Contains(SelectedNumber);
+    public string WatchedStatusBadge => IsCurrentNumberWatched ? (SelectedItem?.Type.ToLower() == "manga" ? "✔ LETTO" : "✔ VISTO") : "";
+    public string UnmarkButtonText => SelectedItem?.Type.ToLower() == "manga" ? "✕ Deseleziona dai letti" : "✕ Deseleziona dai visti";
 
     public string AnimeTabColor => ActiveTab == "Anime" ? "#FF640A" : "#D0D0D0";
     public string MangaTabColor => ActiveTab == "Manga" ? "#FF640A" : "#D0D0D0";
@@ -88,6 +93,15 @@ public partial class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(ActionButtonText));
         OnPropertyChanged(nameof(NumberLabel));
+        OnPropertyChanged(nameof(IsCurrentNumberWatched));
+        OnPropertyChanged(nameof(WatchedStatusBadge));
+        OnPropertyChanged(nameof(UnmarkButtonText));
+    }
+
+    partial void OnSelectedNumberChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsCurrentNumberWatched));
+        OnPropertyChanged(nameof(WatchedStatusBadge));
     }
 
     [RelayCommand]
@@ -206,7 +220,14 @@ public partial class MainViewModel : ViewModelBase
     {
         SelectedItem = item;
         MaxNumber = item.Count > 0 ? item.Count : 1;
-        SelectedNumber = item.Count > 0 ? Math.Min(item.Count, MaxNumber) : 1;
+        if (item.WatchedNumbers != null && item.WatchedNumbers.Count > 0)
+        {
+            SelectedNumber = item.WatchedNumbers.Max();
+        }
+        else
+        {
+            SelectedNumber = 1;
+        }
         _ = LoadMediaDetailsAsync(item);
     }
 
@@ -231,6 +252,63 @@ public partial class MainViewModel : ViewModelBase
     public void CloseDetails()
     {
         SelectedItem = null;
+    }
+
+    [RelayCommand]
+    public async Task UnmarkCurrentNumberAsync()
+    {
+        if (SelectedItem == null) return;
+        var num = SelectedNumber;
+        var title = SelectedItem.Title;
+        var unit = SelectedItem.Type.ToLower() == "manga" ? "Capitolo" : "Episodio";
+
+        StatusText = $"Rimozione {unit} {num} dalla cronologia di {title}...";
+        var success = await _cliService.UnmarkItemAsync(SelectedItem, num);
+        if (success)
+        {
+            if (SelectedItem.WatchedNumbers != null)
+            {
+                SelectedItem.WatchedNumbers.Remove(num);
+                SelectedItem.Count = SelectedItem.WatchedNumbers.Count;
+                SelectedItem.UpdateWatchedSummary();
+            }
+
+            OnPropertyChanged(nameof(IsCurrentNumberWatched));
+            OnPropertyChanged(nameof(WatchedStatusBadge));
+            StatusText = $"✔ {unit} {num} rimosso dalla cronologia di \"{title}\".";
+
+            if (ActiveTab == "Cronologia" && SelectedItem.Count == 0)
+            {
+                Items.Remove(SelectedItem);
+                SelectedItem = null;
+            }
+        }
+        else
+        {
+            StatusText = $"Impossibile rimuovere {unit} {num} dalla cronologia.";
+        }
+    }
+
+    [RelayCommand]
+    public async Task RemoveItemFromHistoryAsync()
+    {
+        if (SelectedItem == null) return;
+        var title = SelectedItem.Title;
+        StatusText = $"Rimozione \"{title}\" dalla cronologia...";
+        var success = await _cliService.RemoveFromHistoryAsync(SelectedItem);
+        if (success)
+        {
+            if (ActiveTab == "Cronologia")
+            {
+                Items.Remove(SelectedItem);
+            }
+            SelectedItem = null;
+            StatusText = $"✔ \"{title}\" rimosso completamente dalla cronologia.";
+        }
+        else
+        {
+            StatusText = $"Impossibile rimuovere \"{title}\" dalla cronologia.";
+        }
     }
 
     [RelayCommand]

@@ -282,7 +282,7 @@
                     </StackPanel>
 
                     <!-- Right: Episode/Chapter Picker & Crunchyroll Orange Action Button -->
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <TextBlock Text="{Binding NumberLabel}" Foreground="#A0A0A0" FontSize="13" VerticalAlignment="Center"/>
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -301,6 +301,30 @@
                             </StackPanel>
                         </StackPanel>
 
+                        <!-- Watched Badge & Unmark Button -->
+                        <Border Background="#201005"
+                                BorderBrush="#FF640A"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="8,6"
+                                VerticalAlignment="Center"
+                                IsVisible="{Binding IsCurrentNumberWatched}">
+                            <TextBlock Text="{Binding WatchedStatusBadge}" Foreground="#FF640A" FontWeight="Bold" FontSize="11"/>
+                        </Border>
+
+                        <Button Command="{Binding UnmarkCurrentNumberCommand}"
+                                ToolTip.Tip="Deseleziona questo episodio/capitolo dalla cronologia"
+                                Padding="12,10"
+                                CornerRadius="4"
+                                Background="#2A1B1B"
+                                BorderBrush="#E53935"
+                                BorderThickness="1"
+                                Foreground="#FF7070"
+                                Cursor="Hand"
+                                IsVisible="{Binding IsCurrentNumberWatched}">
+                            <TextBlock Text="{Binding UnmarkButtonText}" FontSize="12" FontWeight="SemiBold"/>
+                        </Button>
+
                         <!-- Big Crunchyroll Orange Play Button -->
                         <Button Command="{Binding PlayOrReadCommand}" 
                                 Padding="26,12" 
@@ -311,6 +335,16 @@
                                 Cursor="Hand">
                             <TextBlock Text="{Binding ActionButtonText}" FontSize="13" FontWeight="Black" Foreground="#000000"/>
                         </Button>
+
+                        <!-- Remove Entire Title from History -->
+                        <Button Command="{Binding RemoveItemFromHistoryCommand}" 
+                                ToolTip.Tip="Rimuovi l'intera opera dalla cronologia"
+                                Background="#1F1F23" 
+                                Foreground="#808080"
+                                CornerRadius="4" 
+                                Padding="12,10"
+                                Cursor="Hand"
+                                Content="🗑"/>
 
                         <Button Command="{Binding CloseDetailsCommand}" 
                                 Content="✕" 

@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace MangaGui.Models;
 
-public class MediaItem
+public partial class MediaItem : ObservableObject
 {
     [JsonPropertyName("id")]
     public string? Id { get; set; }
@@ -38,20 +41,73 @@ public class MediaItem
     [JsonPropertyName("author")]
     public string? Author { get; set; }
 
-    [JsonPropertyName("count")]
-    public int Count { get; set; }
+    [ObservableProperty]
+    [property: JsonPropertyName("count")]
+    private int _count;
 
-    [JsonPropertyName("lastItem")]
-    public string? LastItem { get; set; }
+    [ObservableProperty]
+    [property: JsonPropertyName("lastItem")]
+    private string? _lastItem;
 
     [JsonPropertyName("lastAccessedAt")]
     public string? LastAccessedAt { get; set; }
+
+    [ObservableProperty]
+    [property: JsonPropertyName("watchedSummary")]
+    private string? _watchedSummary;
+
+    [JsonPropertyName("watchedNumbers")]
+    public List<int>? WatchedNumbers { get; set; } = new();
+
+    public void UpdateWatchedSummary()
+    {
+        if (WatchedNumbers == null || WatchedNumbers.Count == 0)
+        {
+            WatchedSummary = null;
+            LastItem = null;
+            OnPropertyChanged(nameof(SubDubText));
+            return;
+        }
+
+        var sorted = WatchedNumbers.Distinct().OrderBy(n => n).ToList();
+        var ranges = new List<string>();
+        int start = sorted[0];
+        int prev = sorted[0];
+
+        for (int i = 1; i < sorted.Count; i++)
+        {
+            int cur = sorted[i];
+            if (cur == prev + 1)
+            {
+                prev = cur;
+            }
+            else
+            {
+                ranges.Add(start == prev ? $"{start}" : $"{start}-{prev}");
+                start = cur;
+                prev = cur;
+            }
+        }
+        ranges.Add(start == prev ? $"{start}" : $"{start}-{prev}");
+
+        var prefix = Type.ToLower() == "manga" ? "Cap." : "Ep.";
+        WatchedSummary = $"{prefix} {string.Join(", ", ranges)}";
+        LastItem = $"{prefix} {sorted.Last()}";
+        OnPropertyChanged(nameof(SubDubText));
+    }
 
     // Caption under the poster
     public string SubDubText
     {
         get
         {
+            if (!string.IsNullOrWhiteSpace(WatchedSummary))
+            {
+                var label = Type.ToLower() == "manga" ? "Letti" : "Visti";
+                var unit = Type.ToLower() == "manga" ? "cap." : "ep.";
+                return $"{label}: {WatchedSummary} ({Count} {unit})";
+            }
+
             if (!string.IsNullOrWhiteSpace(LastItem))
             {
                 var label = Type.ToLower() == "manga" ? "Letto" : "Visto";
