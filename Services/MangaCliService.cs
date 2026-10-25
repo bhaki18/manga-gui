@@ -2,11 +2,55 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using MangaGui.Models;
 
 namespace MangaGui.Services;
+
+public class StreamInfoResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("streamUrl")]
+    public string? StreamUrl { get; set; }
+
+    [JsonPropertyName("title")]
+    public string? Title { get; set; }
+
+    [JsonPropertyName("episode")]
+    public string? Episode { get; set; }
+
+    [JsonPropertyName("referer")]
+    public string? Referer { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
+public class ChapterInfoResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("pages")]
+    public List<string> Pages { get; set; } = new();
+
+    [JsonPropertyName("title")]
+    public string? Title { get; set; }
+
+    [JsonPropertyName("chapter")]
+    public string? Chapter { get; set; }
+
+    [JsonPropertyName("referer")]
+    public string? Referer { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
 
 public class MangaCliService
 {
@@ -50,6 +94,20 @@ public class MangaCliService
         return output.Trim();
     }
 
+    public async Task<List<MediaItem>> GetHistoryAsync()
+    {
+        try
+        {
+            var json = await RunCommandAsync("--history --json");
+            return JsonSerializer.Deserialize<List<MediaItem>>(json) ?? new List<MediaItem>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching history: {ex.Message}");
+            return new List<MediaItem>();
+        }
+    }
+
     public async Task<List<MediaItem>> GetAnimeCatalogAsync(string? source = null)
     {
         try
@@ -62,20 +120,6 @@ public class MangaCliService
         catch (Exception ex)
         {
             Console.WriteLine($"Error fetching anime catalog: {ex.Message}");
-            return new List<MediaItem>();
-        }
-    }
-
-        public async Task<List<MediaItem>> GetHistoryAsync()
-    {
-        try
-        {
-            var json = await RunCommandAsync("--history --json");
-            return JsonSerializer.Deserialize<List<MediaItem>>(json) ?? new List<MediaItem>();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error fetching history: {ex.Message}");
             return new List<MediaItem>();
         }
     }
@@ -116,7 +160,7 @@ public class MangaCliService
         try
         {
             var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
-            var langArg = !string.IsNullOrWhiteSpace(lang) ? $"-l {lang}" : "";
+            var langArg = !string.IsNullOrWhiteSpace(lang) ? $"-l {lang}" : "-l it";
             var json = await RunCommandAsync($"\"{query}\" -m {srcArg} {langArg} --json");
             return JsonSerializer.Deserialize<List<MediaItem>>(json) ?? new List<MediaItem>();
         }
@@ -127,65 +171,74 @@ public class MangaCliService
         }
     }
 
-    public async Task<bool> PlayStreamAsync(string title, int episode, string? source = null)
+    public async Task<(bool success, string message)> PlayStreamAsync(MediaItem item, int episode)
     {
-        var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
         try
         {
-            // Try getting the direct stream URL first for instant MPV playback
-            var streamUrl = await RunCommandAsync($"\"{title}\" -a -e {episode} {srcArg} --get-url");
-            var cleanUrl = streamUrl.Trim();
-            if (!string.IsNullOrWhiteSpace(cleanUrl) && (cleanUrl.StartsWith("http://") || cleanUrl.StartsWith("https://")))
+            var srcArg = !string.IsNullOrWhiteSpace(item.Source) && item.Source != "all" ? $"--source {item.Source}" : "";
+            var urlArg = !string.IsNullOrWhiteSpace(item.Url) ? $"--url \"{item.Url}\"" : "";
+
+            var json = await RunCommandAsync($"stream-info {urlArg} --episode {episode} {srcArg} --json");
+            var info = JsonSerializer.Deserialize<StreamInfoResponse>(json);
+
+            if (info != null && info.Success && !string.IsNullOrWhiteSpace(info.StreamUrl))
             {
+                var refHeader = !string.IsNullOrWhiteSpace(info.Referer) ? $"--referrer=\"{info.Referer}\"" : "";
                 var mpvPsi = new ProcessStartInfo
                 {
                     FileName = "mpv",
-                    Arguments = $"\"{cleanUrl}\" --title=\"{title} - Episodio {episode}\" --force-window=immediate --save-position-on-quit",
-                    UseShellExecute = false
+                    Arguments = $"\"{info.StreamUrl}\" --title=\"{item.Title} - Episodio {episode}\" --force-window=immediate {refHeader}",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
                 };
                 PassDisplayEnv(mpvPsi);
                 Process.Start(mpvPsi);
-                return true;
+                return (true, $"In riproduzione: {item.Title} (Episodio {episode})");
             }
+
+            return (false, info?.Error ?? "Impossibile estrarre il flusso video per questo episodio.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Direct MPV extraction error: {ex.Message}");
+            return (false, $"Errore riproduzione: {ex.Message}");
         }
-
-        // Fallback: Launch manga-cli player detached
-        LaunchDetached($"\"{title}\" -a -e {episode} {srcArg}");
-        return true;
     }
 
-    public Task<bool> ReadMangaAsync(string title, int chapter, string? source = null)
+    public async Task<(bool success, string message)> ReadMangaAsync(MediaItem item, int chapter)
     {
-        var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
-        LaunchDetached($"\"{title}\" -m -C {chapter} {srcArg}");
-        return Task.FromResult(true);
-    }
-
-    private void LaunchDetached(string arguments)
-    {
-        var psi = new ProcessStartInfo
+        try
         {
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+            var srcArg = !string.IsNullOrWhiteSpace(item.Source) && item.Source != "all" ? $"--source {item.Source}" : "";
+            var urlArg = !string.IsNullOrWhiteSpace(item.Url) ? $"--url \"{item.Url}\"" : "";
 
-        if (_cliScriptPath.EndsWith(".js") && File.Exists(_cliScriptPath))
-        {
-            psi.FileName = "node";
-            psi.Arguments = $"\"{_cliScriptPath}\" {arguments}";
+            var json = await RunCommandAsync($"chapter-info {urlArg} --chapter {chapter} {srcArg} --json");
+            var info = JsonSerializer.Deserialize<ChapterInfoResponse>(json);
+
+            if (info != null && info.Success && info.Pages != null && info.Pages.Count > 0)
+            {
+                var pagesArgs = string.Join(" ", info.Pages.Select(p => $"\"{p}\""));
+                var mpvPsi = new ProcessStartInfo
+                {
+                    FileName = "mpv",
+                    Arguments = $"--title=\"{item.Title} - Capitolo {chapter}\" --image-display-duration=inf --force-window=immediate {pagesArgs}",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                PassDisplayEnv(mpvPsi);
+                Process.Start(mpvPsi);
+                return (true, $"Aperto lettore: {item.Title} (Capitolo {chapter} - {info.Pages.Count} pagine)");
+            }
+
+            return (false, info?.Error ?? "Nessuna pagina trovata per questo capitolo.");
         }
-        else
+        catch (Exception ex)
         {
-            psi.FileName = "manga-cli";
-            psi.Arguments = arguments;
+            return (false, $"Errore lettura: {ex.Message}");
         }
-
-        PassDisplayEnv(psi);
-        Process.Start(psi);
     }
 
     private void PassDisplayEnv(ProcessStartInfo psi)

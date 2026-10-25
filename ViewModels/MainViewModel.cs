@@ -191,15 +191,15 @@ public partial class MainViewModel : ViewModelBase
 
         if (SelectedItem.Type.ToLower() == "anime")
         {
-            StatusText = $"Avvio player per {SelectedItem.Title} (Episodio {SelectedNumber})...";
-            await _cliService.PlayStreamAsync(SelectedItem.Title, SelectedNumber, SelectedItem.Source);
-            StatusText = $"In riproduzione: {SelectedItem.Title} (Episodio {SelectedNumber})";
+            StatusText = $"Caricamento flusso per {SelectedItem.Title} (Episodio {SelectedNumber})...";
+            var (success, msg) = await _cliService.PlayStreamAsync(SelectedItem, SelectedNumber);
+            StatusText = msg;
         }
         else
         {
-            StatusText = $"Apertura lettore per {SelectedItem.Title} (Capitolo {SelectedNumber})...";
-            await _cliService.ReadMangaAsync(SelectedItem.Title, SelectedNumber, SelectedItem.Source);
-            StatusText = $"In lettura: {SelectedItem.Title} (Capitolo {SelectedNumber})";
+            StatusText = $"Caricamento pagine per {SelectedItem.Title} (Capitolo {SelectedNumber})...";
+            var (success, msg) = await _cliService.ReadMangaAsync(SelectedItem, SelectedNumber);
+            StatusText = msg;
         }
     }
 
