@@ -23,7 +23,13 @@
             <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
                 <!-- Logo & Brand -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <Border CornerRadius="8" Background="LinearGradient(0%,0% to 100%,100%, #6366F1, #A855F7)" Width="36" Height="36">
+                    <Border CornerRadius="8" Width="36" Height="36">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                <GradientStop Color="#6366F1" Offset="0"/>
+                                <GradientStop Color="#A855F7" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
                         <TextBlock Text="🎬" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <TextBlock Text="Manga &amp; Anime Hub" FontWeight="Bold" FontSize="18" VerticalAlignment="Center" Foreground="#F3F4F6"/>
@@ -37,13 +43,14 @@
                             CornerRadius="20"
                             Padding="16,8"
                             FontWeight="SemiBold"
-                            Background="{Binding ActiveTab, Converter={x:Null}}" />
+                            Background="#252836" />
                     <Button Content="📖 Manga" 
                             Command="{Binding SwitchTabCommand}" 
                             CommandParameter="Manga"
                             CornerRadius="20"
                             Padding="16,8"
-                            FontWeight="SemiBold" />
+                            FontWeight="SemiBold" 
+                            Background="#252836" />
                 </StackPanel>
 
                 <!-- Search Input Box -->
@@ -171,7 +178,7 @@
             </ScrollViewer>
 
             <!-- DETAIL OVERLAY / FLYOUT FOR SELECTED ITEM -->
-            <Border Background="#E60D0E15" 
+            <Border Background="#F00D0E15" 
                     BorderBrush="#2E3248" 
                     BorderThickness="0,1,0,0"
                     VerticalAlignment="Bottom"
@@ -206,10 +213,15 @@
                         <Button Command="{Binding PlayOrReadCommand}" 
                                 Padding="20,10" 
                                 CornerRadius="10" 
-                                Background="LinearGradient(0%,0% to 100%,100%, #3B82F6, #8B5CF6)"
                                 Foreground="#FFFFFF"
                                 FontWeight="Bold"
                                 Cursor="Hand">
+                            <Button.Background>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                    <GradientStop Color="#3B82F6" Offset="0"/>
+                                    <GradientStop Color="#8B5CF6" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Button.Background>
                             <TextBlock Text="▶️ Avvia Ora"/>
                         </Button>
 
