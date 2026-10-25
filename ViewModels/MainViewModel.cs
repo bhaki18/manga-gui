@@ -29,10 +29,10 @@ public partial class MainViewModel : ViewModelBase
     private MediaItem? _selectedItem;
 
     [ObservableProperty]
-    private int _selectedNumber = 1;
+    private decimal _selectedNumber = 1;
 
     [ObservableProperty]
-    private int _maxNumber = 1;
+    private decimal _maxNumber = 1;
 
     [ObservableProperty]
     private string _selectedSource = "Tutte le fonti";
@@ -40,7 +40,7 @@ public partial class MainViewModel : ViewModelBase
     public string ActionButtonText => SelectedItem?.Type.ToLower() == "manga" ? "📖 LEGGI ORA" : "▶ INIZIA A GUARDARE";
     public string NumberLabel => SelectedItem?.Type.ToLower() == "manga" ? "Capitolo:" : "Episodio:";
 
-    public bool IsCurrentNumberWatched => SelectedItem != null && SelectedItem.WatchedNumbers != null && SelectedItem.WatchedNumbers.Contains(SelectedNumber);
+    public bool IsCurrentNumberWatched => SelectedItem != null && SelectedItem.WatchedNumbers != null && SelectedItem.WatchedNumbers.Contains((int)SelectedNumber);
     public string WatchedStatusBadge => IsCurrentNumberWatched ? (SelectedItem?.Type.ToLower() == "manga" ? "✔ LETTO" : "✔ VISTO") : "";
     public string UnmarkButtonText => SelectedItem?.Type.ToLower() == "manga" ? "✕ Deseleziona dai letti" : "✕ Deseleziona dai visti";
 
@@ -106,7 +106,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(UnmarkButtonText));
     }
 
-    partial void OnSelectedNumberChanged(int value)
+    partial void OnSelectedNumberChanged(decimal value)
     {
         OnPropertyChanged(nameof(IsCurrentNumberWatched));
         OnPropertyChanged(nameof(WatchedStatusBadge));
@@ -227,15 +227,13 @@ public partial class MainViewModel : ViewModelBase
     public void SelectItem(MediaItem item)
     {
         SelectedItem = item;
-        MaxNumber = item.Count > 0 ? item.Count : 1;
-        if (item.WatchedNumbers != null && item.WatchedNumbers.Count > 0)
-        {
-            SelectedNumber = item.WatchedNumbers.Max();
-        }
-        else
-        {
-            SelectedNumber = 1;
-        }
+        var highestWatched = (item.WatchedNumbers != null && item.WatchedNumbers.Count > 0)
+            ? item.WatchedNumbers.Max()
+            : 1;
+
+        MaxNumber = Math.Max(highestWatched, item.Count > 0 ? item.Count : 1);
+        SelectedNumber = highestWatched;
+
         _ = LoadMediaDetailsAsync(item);
     }
 
@@ -246,11 +244,7 @@ public partial class MainViewModel : ViewModelBase
             var total = await _cliService.GetMediaDetailsAsync(item);
             if (SelectedItem == item && total > 0)
             {
-                MaxNumber = total;
-                if (SelectedNumber > MaxNumber)
-                {
-                    SelectedNumber = MaxNumber;
-                }
+                MaxNumber = Math.Max((decimal)total, SelectedNumber);
             }
         }
         catch {}
@@ -266,7 +260,7 @@ public partial class MainViewModel : ViewModelBase
     public async Task UnmarkCurrentNumberAsync()
     {
         if (SelectedItem == null) return;
-        var num = SelectedNumber;
+        var num = (int)SelectedNumber;
         var title = SelectedItem.Title;
         var unit = SelectedItem.Type.ToLower() == "manga" ? "Capitolo" : "Episodio";
 
@@ -324,16 +318,17 @@ public partial class MainViewModel : ViewModelBase
     {
         if (SelectedItem == null) return;
 
+        var num = (int)SelectedNumber;
         if (SelectedItem.Type.ToLower() == "anime")
         {
-            StatusText = $"Caricamento flusso per {SelectedItem.Title} (Episodio {SelectedNumber})...";
-            var (success, msg) = await _cliService.PlayStreamAsync(SelectedItem, SelectedNumber);
+            StatusText = $"Caricamento flusso per {SelectedItem.Title} (Episodio {num})...";
+            var (success, msg) = await _cliService.PlayStreamAsync(SelectedItem, num);
             StatusText = msg;
         }
         else
         {
-            StatusText = $"Caricamento pagine per {SelectedItem.Title} (Capitolo {SelectedNumber})...";
-            var (success, msg) = await _cliService.ReadMangaAsync(SelectedItem, SelectedNumber);
+            StatusText = $"Caricamento pagine per {SelectedItem.Title} (Capitolo {num})...";
+            var (success, msg) = await _cliService.ReadMangaAsync(SelectedItem, num);
             StatusText = msg;
         }
     }
