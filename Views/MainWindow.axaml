@@ -3,232 +3,300 @@
         xmlns:vm="using:MangaGui.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
+        xmlns:loader="clr-namespace:AsyncImageLoader;assembly=AsyncImageLoader.Avalonia"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="MangaGui.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Title="Manga &amp; Anime Hub"
-        Width="1100" Height="720"
-        MinWidth="850" MinHeight="550"
+        Title="Crunchyroll - MangaGui"
+        Width="1280" Height="800"
+        MinWidth="950" MinHeight="600"
         WindowStartupLocation="CenterScreen"
-        Background="#0F1017">
+        Background="#000000">
 
     <Design.DataContext>
         <vm:MainViewModel />
     </Design.DataContext>
 
     <Grid RowDefinitions="Auto,*,Auto">
-        <!-- TOP APP BAR -->
-        <Border Grid.Row="0" Background="#161824" BorderBrush="#252836" BorderThickness="0,0,0,1" Padding="20,15">
-            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
-                <!-- Logo & Brand -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <Border CornerRadius="8" Width="36" Height="36">
-                        <Border.Background>
-                            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                <GradientStop Color="#6366F1" Offset="0"/>
-                                <GradientStop Color="#A855F7" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Border.Background>
-                        <TextBlock Text="🎬" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <TextBlock Text="Manga &amp; Anime Hub" FontWeight="Bold" FontSize="18" VerticalAlignment="Center" Foreground="#F3F4F6"/>
+        <!-- CRUNCHYROLL TOP NAVIGATION BAR -->
+        <Border Grid.Row="0" Background="#000000" BorderBrush="#1C1C1E" BorderThickness="0,0,0,1" Padding="30,12">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                <!-- Crunchyroll Logo & Brand -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Cursor="Hand">
+                    <!-- Crunchyroll Orange Eye Icon -->
+                    <Path Data="M 12 2 C 6.48 2 2 6.48 2 12 C 2 17.52 6.48 22 12 22 C 17.52 22 22 17.52 22 12 C 22 6.48 17.52 2 12 2 Z M 12 6 C 15.31 6 18 8.69 18 12 C 18 15.31 15.31 18 12 18 C 8.69 18 6 15.31 6 12 C 6 8.69 8.69 6 12 6 Z"
+                          Fill="#FF640A" Width="26" Height="26" Stretch="Uniform" VerticalAlignment="Center"/>
+                    <TextBlock Text="crunchyroll" FontWeight="Black" FontSize="22" Foreground="#FF640A" VerticalAlignment="Center" LetterSpacing="-0.5"/>
                 </StackPanel>
 
-                <!-- Navigation Tabs (Anime / Manga) -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="30,0,0,0" VerticalAlignment="Center">
-                    <Button Content="🎬 Anime" 
+                <!-- Navigation Links -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="24" Margin="35,0,0,0" VerticalAlignment="Center">
+                    <Button Content="Anime" 
                             Command="{Binding SwitchTabCommand}" 
                             CommandParameter="Anime"
-                            CornerRadius="20"
-                            Padding="16,8"
-                            FontWeight="SemiBold"
-                            Background="#252836" />
-                    <Button Content="📖 Manga" 
-                            Command="{Binding SwitchTabCommand}" 
-                            CommandParameter="Manga"
-                            CornerRadius="20"
-                            Padding="16,8"
-                            FontWeight="SemiBold" 
-                            Background="#252836" />
-                </StackPanel>
-
-                <!-- Search Input Box -->
-                <Grid Grid.Column="2" Margin="25,0" MaxWidth="450">
-                    <TextBox Text="{Binding SearchQuery}" 
-                             PlaceholderText="Cerca anime o manga per titolo... (premi Invio)" 
-                             CornerRadius="20"
-                             Padding="15,8,40,8"
-                             Background="#1F2232"
-                             BorderBrush="#32364B"
-                             Foreground="#FFFFFF">
-                        <TextBox.KeyBindings>
-                            <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
-                        </TextBox.KeyBindings>
-                    </TextBox>
-                    <Button Command="{Binding SearchCommand}"
-                            HorizontalAlignment="Right"
                             Background="Transparent"
                             BorderThickness="0"
-                            Padding="12,0"
-                            Content="🔍" 
+                            Padding="0"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Foreground="{Binding ActiveTab, Converter={x:Null}}"
                             Cursor="Hand" />
-                </Grid>
 
-                <!-- Source Filter Dropdown -->
-                <ComboBox Grid.Column="3" 
-                          ItemsSource="{Binding Sources}" 
-                          SelectedItem="{Binding SelectedSource}"
-                          CornerRadius="10"
-                          Background="#1F2232"
-                          BorderBrush="#32364B"
-                          Width="160"
-                          VerticalAlignment="Center"
-                          Margin="0,0,10,0"/>
+                    <Button Content="Manga" 
+                            Command="{Binding SwitchTabCommand}" 
+                            CommandParameter="Manga"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Foreground="#A0A0A0"
+                            Cursor="Hand" />
 
-                <!-- Refresh Catalog Button -->
-                <Button Grid.Column="4"
-                        Command="{Binding LoadCatalogCommand}"
-                        Content="🔄 Catalogo"
-                        CornerRadius="10"
-                        Background="#252836"
-                        BorderBrush="#373B52"
-                        Padding="12,8"
-                        VerticalAlignment="Center"/>
+                    <Button Content="Popolari" 
+                            Command="{Binding LoadCatalogCommand}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Foreground="#A0A0A0"
+                            Cursor="Hand" />
+
+                    <Button Content="Simulcast" 
+                            Command="{Binding LoadCatalogCommand}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Foreground="#A0A0A0"
+                            Cursor="Hand" />
+
+                    <!-- Source Selector -->
+                    <ComboBox ItemsSource="{Binding Sources}" 
+                              SelectedItem="{Binding SelectedSource}"
+                              CornerRadius="4"
+                              Background="#141519"
+                              BorderBrush="#2B2C30"
+                              Foreground="#FFFFFF"
+                              FontSize="12"
+                              Width="140"
+                              VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Right Tools (Search, Premium, Bookmark, User) -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="20" VerticalAlignment="Center">
+                    <!-- Search Input Box -->
+                    <Border Background="#141519" BorderBrush="#2B2C30" BorderThickness="1" CornerRadius="20" Padding="12,6" Width="240">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox Grid.Column="0" 
+                                     Text="{Binding SearchQuery}" 
+                                     PlaceholderText="Cerca anime, manga..." 
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Padding="0"
+                                     FontSize="13"
+                                     Foreground="#FFFFFF">
+                                <TextBox.KeyBindings>
+                                    <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
+                                </TextBox.KeyBindings>
+                            </TextBox>
+                            <Button Grid.Column="1" 
+                                    Command="{Binding SearchCommand}"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Padding="4,0"
+                                    Content="🔍" 
+                                    Cursor="Hand" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Premium Crown / Badge -->
+                    <Border Background="#FF640A" CornerRadius="4" Padding="10,6" Cursor="Hand">
+                        <TextBlock Text="👑 PREMIUM" FontWeight="Black" FontSize="11" Foreground="#000000"/>
+                    </Border>
+
+                    <!-- Bookmark Icon -->
+                    <TextBlock Text="🔖" FontSize="16" Foreground="#A0A0A0" VerticalAlignment="Center" Cursor="Hand"/>
+
+                    <!-- User Avatar -->
+                    <Border CornerRadius="16" Background="#FF640A" Width="30" Height="30" Cursor="Hand">
+                        <TextBlock Text="👤" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#000000"/>
+                    </Border>
+                </StackPanel>
             </Grid>
         </Border>
 
-        <!-- MAIN CONTENT (ITEMS GRID & DETAIL PANEL) -->
+        <!-- MAIN BODY -->
         <Grid Grid.Row="1">
             <!-- Loading Indicator -->
             <ProgressBar IsIndeterminate="True" 
                          IsVisible="{Binding IsLoading}" 
-                         Height="3" 
+                         Height="2" 
                          VerticalAlignment="Top" 
-                         Foreground="#A855F7"/>
+                         Foreground="#FF640A"/>
 
-            <!-- Items Grid -->
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="25">
-                <ItemsControl ItemsSource="{Binding Items}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Button Command="{Binding ((vm:MainViewModel)DataContext).SelectItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    CommandParameter="{Binding}"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Padding="0"
-                                    Margin="0,0,18,18">
-                                <Border Width="230" 
-                                        Height="150" 
-                                        CornerRadius="14" 
-                                        Background="#181A27" 
-                                        BorderBrush="#25283B" 
-                                        BorderThickness="1" 
-                                        Padding="14"
-                                        ClipToBounds="True">
-                                    <Grid RowDefinitions="Auto,*,Auto">
-                                        <!-- Card Header: Type Icon & Source Pill -->
-                                        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
-                                            <TextBlock Grid.Column="0" Text="{Binding TypeIcon}" FontSize="14" VerticalAlignment="Center"/>
-                                            <Border Grid.Column="2" 
-                                                    CornerRadius="6" 
-                                                    Padding="8,2" 
-                                                    Background="#25283B">
-                                                <TextBlock Text="{Binding SourceLabel}" 
-                                                           FontSize="10" 
-                                                           FontWeight="Medium" 
-                                                           Foreground="#9CA3AF"/>
-                                            </Border>
-                                        </Grid>
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="40,25">
+                <StackPanel Spacing="16">
+                    <!-- PAGE HEADER (MOST POPULAR ANIME + FILTER) -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" 
+                                   Text="{Binding ActiveTab, StringFormat='Most Popular {0}'}" 
+                                   FontSize="28" 
+                                   FontWeight="Bold" 
+                                   Foreground="#FFFFFF"/>
 
-                                        <!-- Title -->
-                                        <TextBlock Grid.Row="1" 
-                                                   Text="{Binding Title}" 
-                                                   FontWeight="Bold" 
-                                                   FontSize="14" 
-                                                   Foreground="#F9FAFB" 
-                                                   TextWrapping="Wrap" 
-                                                   MaxLines="3"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   VerticalAlignment="Center"
-                                                   Margin="0,8"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="24" VerticalAlignment="Center">
+                            <TextBlock Text="≡ POPULARITY" FontSize="12" FontWeight="Bold" Foreground="#A0A0A0" VerticalAlignment="Center" Cursor="Hand"/>
+                            <TextBlock Text="⎇ FILTER" FontSize="12" FontWeight="Bold" Foreground="#A0A0A0" VerticalAlignment="Center" Cursor="Hand"/>
+                        </StackPanel>
+                    </Grid>
 
-                                        <!-- Footer Badge -->
-                                        <Border Grid.Row="2" 
-                                                HorizontalAlignment="Left"
-                                                CornerRadius="6" 
-                                                Padding="8,3" 
-                                                Background="{Binding BadgeColor}">
-                                            <TextBlock Text="{Binding AudioBadge}" 
-                                                       FontSize="10" 
-                                                       FontWeight="Bold" 
-                                                       Foreground="#FFFFFF"/>
+                    <!-- SUB-HEADER CATEGORY -->
+                    <TextBlock Text="Popular" FontSize="16" FontWeight="SemiBold" Foreground="#FFFFFF" Margin="0,10,0,8"/>
+
+                    <!-- VERTICAL POSTER CARDS GRID (EXACT CRUNCHYROLL STYLE) -->
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Command="{Binding ((vm:MainViewModel)DataContext).SelectItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        CommandParameter="{Binding}"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="0"
+                                        Margin="0,0,24,28"
+                                        Cursor="Hand">
+                                    <StackPanel Width="175">
+                                        <!-- Vertical Poster Image Container -->
+                                        <Border Width="175" 
+                                                Height="255" 
+                                                CornerRadius="4" 
+                                                Background="#141519" 
+                                                ClipToBounds="True">
+                                            <Grid>
+                                                <!-- Cover Image from Web -->
+                                                <Image loader:ImageLoader.Source="{Binding Image}" 
+                                                       Stretch="UniformToFill" 
+                                                       IsVisible="{Binding HasImage}" />
+
+                                                <!-- Fallback placeholder if no image -->
+                                                <Grid IsVisible="{Binding !HasImage}" Background="#1E1F26">
+                                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
+                                                        <TextBlock Text="{Binding TypeIcon}" FontSize="32" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding Title}" 
+                                                                   FontSize="11" 
+                                                                   FontWeight="Bold"
+                                                                   Foreground="#A0A0A0" 
+                                                                   TextWrapping="Wrap" 
+                                                                   TextAlignment="Center"
+                                                                   Margin="8,0"/>
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <!-- Top-Right Crunchyroll Orange Bookmark Ribbon -->
+                                                <Border HorizontalAlignment="Right" 
+                                                        VerticalAlignment="Top" 
+                                                        Background="#FF640A" 
+                                                        CornerRadius="0,4,0,6"
+                                                        Padding="6,3">
+                                                    <TextBlock Text="🔖" FontSize="10" Foreground="#000000"/>
+                                                </Border>
+
+                                                <!-- Bottom Source Pill Overlay -->
+                                                <Border HorizontalAlignment="Left" 
+                                                        VerticalAlignment="Bottom" 
+                                                        Background="#B3000000" 
+                                                        CornerRadius="0,6,0,0"
+                                                        Padding="6,2">
+                                                    <TextBlock Text="{Binding SourceLabel}" FontSize="9" FontWeight="Bold" Foreground="#FFFFFF"/>
+                                                </Border>
+                                            </Grid>
                                         </Border>
-                                    </Grid>
-                                </Border>
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+
+                                        <!-- Anime / Manga Title Below Poster -->
+                                        <TextBlock Text="{Binding Title}" 
+                                                   FontWeight="SemiBold" 
+                                                   FontSize="13" 
+                                                   Foreground="#FFFFFF" 
+                                                   TextWrapping="Wrap" 
+                                                   MaxLines="2"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Margin="0,8,0,3"/>
+
+                                        <!-- Subtitle: Sub | Dub (Exact Crunchyroll caption) -->
+                                        <TextBlock Text="{Binding SubDubText}" 
+                                                   FontSize="12" 
+                                                   Foreground="#A0A0A0"/>
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
             </ScrollViewer>
 
-            <!-- DETAIL OVERLAY / FLYOUT FOR SELECTED ITEM -->
-            <Border Background="#F00D0E15" 
-                    BorderBrush="#2E3248" 
-                    BorderThickness="0,1,0,0"
+            <!-- CRUNCHYROLL DETAIL POPUP / MODAL (WHEN A CARD IS CLICKED) -->
+            <Border Background="#EB000000" 
                     VerticalAlignment="Bottom"
-                    Padding="25,20"
+                    BorderBrush="#252528"
+                    BorderThickness="0,1,0,0"
+                    Padding="35,22"
                     IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
-                    <!-- Left: Selected Media Info -->
-                    <StackPanel Grid.Column="0" Spacing="6" VerticalAlignment="Center">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <!-- Left: Poster Thumbnail -->
+                    <Border Grid.Column="0" Width="70" Height="100" CornerRadius="4" ClipToBounds="True" Background="#141519" Margin="0,0,20,0">
+                        <Image loader:ImageLoader.Source="{Binding SelectedItem.Image}" Stretch="UniformToFill"/>
+                    </Border>
+
+                    <!-- Middle: Title & Metadata -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6">
                         <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock Text="{Binding SelectedItem.TypeIcon}" FontSize="18" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding SelectedItem.Title}" FontWeight="Bold" FontSize="18" Foreground="#FFFFFF"/>
-                            <Border CornerRadius="6" Padding="8,2" Background="{Binding SelectedItem.BadgeColor}">
-                                <TextBlock Text="{Binding SelectedItem.AudioBadge}" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF"/>
+                            <TextBlock Text="{Binding SelectedItem.Title}" FontWeight="Black" FontSize="20" Foreground="#FFFFFF"/>
+                            <Border CornerRadius="4" Padding="6,2" Background="#FF640A" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SelectedItem.AudioBadge}" FontSize="10" FontWeight="Black" Foreground="#000000"/>
                             </Border>
                         </StackPanel>
-                        <TextBlock Text="{Binding SelectedItem.SourceLabel, StringFormat='Fonte: {0}'}" 
-                                   Foreground="#9CA3AF" FontSize="12"/>
+                        <TextBlock Text="{Binding SelectedItem.SubDubText}" FontSize="13" Foreground="#FF640A" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding SelectedItem.SourceLabel, StringFormat='Fonte provider: {0}'}" FontSize="12" Foreground="#808080"/>
                     </StackPanel>
 
-                    <!-- Right: Number selection & Action Button -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <TextBlock Text="Numero:" VerticalAlignment="Center" Foreground="#D1D5DB" FontSize="13"/>
+                    <!-- Right: Episode/Chapter Picker & Crunchyroll Orange Action Button -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock Text="N°:" Foreground="#A0A0A0" FontSize="13" VerticalAlignment="Center"/>
                             <NumericUpDown Value="{Binding SelectedNumber}" 
                                            Minimum="1" 
                                            Maximum="2000" 
-                                           Width="90" 
-                                           CornerRadius="8"
-                                           Background="#1F2232"/>
+                                           Width="95" 
+                                           CornerRadius="4"
+                                           Background="#141519"
+                                           BorderBrush="#333333"
+                                           Foreground="#FFFFFF"/>
                         </StackPanel>
 
+                        <!-- Big Crunchyroll Orange Play Button -->
                         <Button Command="{Binding PlayOrReadCommand}" 
-                                Padding="20,10" 
-                                CornerRadius="10" 
-                                Foreground="#FFFFFF"
-                                FontWeight="Bold"
+                                Padding="26,12" 
+                                CornerRadius="4" 
+                                Background="#FF640A"
+                                Foreground="#000000"
+                                FontWeight="Black"
                                 Cursor="Hand">
-                            <Button.Background>
-                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                    <GradientStop Color="#3B82F6" Offset="0"/>
-                                    <GradientStop Color="#8B5CF6" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Button.Background>
-                            <TextBlock Text="▶️ Avvia Ora"/>
+                            <TextBlock Text="▶ INIZIA A GUARDARE" FontSize="13" FontWeight="Black" Foreground="#000000"/>
                         </Button>
 
                         <Button Command="{Binding CloseDetailsCommand}" 
                                 Content="✕" 
-                                Background="#252836" 
-                                CornerRadius="8" 
+                                Background="#1F1F23" 
+                                Foreground="#A0A0A0"
+                                CornerRadius="4" 
                                 Padding="12,10"
                                 Cursor="Hand"/>
                     </StackPanel>
@@ -236,11 +304,11 @@
             </Border>
         </Grid>
 
-        <!-- BOTTOM STATUS BAR -->
-        <Border Grid.Row="2" Background="#12131D" BorderBrush="#1F2232" BorderThickness="0,1,0,0" Padding="15,6">
+        <!-- CRUNCHYROLL BOTTOM STATUS BAR -->
+        <Border Grid.Row="2" Background="#0A0A0C" BorderBrush="#1C1C1E" BorderThickness="0,1,0,0" Padding="30,8">
             <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Grid.Column="0" Text="{Binding StatusText}" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" Text="manga-gui v1.0.0" Foreground="#4B5563" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="0" Text="{Binding StatusText}" Foreground="#808080" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="Crunchyroll MangaGui v1.0.0" Foreground="#505050" FontSize="12" VerticalAlignment="Center"/>
             </Grid>
         </Border>
     </Grid>

@@ -14,6 +14,9 @@ public class MediaItem
     [JsonPropertyName("url")]
     public string? Url { get; set; }
 
+    [JsonPropertyName("image")]
+    public string? Image { get; set; }
+
     [JsonPropertyName("type")]
     public string Type { get; set; } = "anime"; // "anime" or "manga"
 
@@ -35,22 +38,25 @@ public class MediaItem
     [JsonPropertyName("author")]
     public string? Author { get; set; }
 
+    // Crunchyroll style Sub | Dub text
+    public string SubDubText => Audio?.ToLower() switch
+    {
+        "both" => "Sub | Dub",
+        "ita" => "Dubbed (ITA)",
+        "subita" => "Subtitled (SUB ITA)",
+        "sub" => "Subtitled",
+        _ => Type.ToLower() == "manga" ? "Manga" : "Sub | Dub"
+    };
+
+    public bool HasImage => !string.IsNullOrWhiteSpace(Image);
+
     public string AudioBadge => Audio?.ToLower() switch
     {
         "ita" => "ITA",
         "subita" => "SUB ITA",
         "sub" => "SUB ITA",
-        "both" => "ITA / SUB",
+        "both" => "SUB | DUB",
         _ => Type.ToUpper()
-    };
-
-    public string BadgeColor => Audio?.ToLower() switch
-    {
-        "ita" => "#10B981", // Emerald green
-        "subita" => "#3B82F6", // Bright Blue
-        "sub" => "#3B82F6",
-        "both" => "#F59E0B", // Amber
-        _ => "#8B5CF6" // Violet
     };
 
     public string SourceLabel => !string.IsNullOrWhiteSpace(SourceName) ? SourceName : Source;
