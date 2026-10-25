@@ -38,15 +38,37 @@ public class MediaItem
     [JsonPropertyName("author")]
     public string? Author { get; set; }
 
-    // Crunchyroll style Sub | Dub text
-    public string SubDubText => Audio?.ToLower() switch
+    [JsonPropertyName("count")]
+    public int Count { get; set; }
+
+    [JsonPropertyName("lastItem")]
+    public string? LastItem { get; set; }
+
+    [JsonPropertyName("lastAccessedAt")]
+    public string? LastAccessedAt { get; set; }
+
+    // Caption under the poster
+    public string SubDubText
     {
-        "both" => "Sub | Dub",
-        "ita" => "Dubbed (ITA)",
-        "subita" => "Subtitled (SUB ITA)",
-        "sub" => "Subtitled",
-        _ => Type.ToLower() == "manga" ? "Manga" : "Sub | Dub"
-    };
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(LastItem))
+            {
+                var label = Type.ToLower() == "manga" ? "Letto" : "Visto";
+                var unit = Type.ToLower() == "manga" ? "cap." : "ep.";
+                return $"{label}: {LastItem} ({Count} {unit})";
+            }
+
+            return Audio?.ToLower() switch
+            {
+                "both" => "Sub | Dub",
+                "ita" => "Dubbed (ITA)",
+                "subita" => "Subtitled (SUB ITA)",
+                "sub" => "Subtitled",
+                _ => Type.ToLower() == "manga" ? "Manga" : "Sub | Dub"
+            };
+        }
+    }
 
     public bool HasImage => !string.IsNullOrWhiteSpace(Image);
 

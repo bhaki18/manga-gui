@@ -31,10 +31,31 @@ public partial class MainViewModel : ViewModelBase
     private int _selectedNumber = 1;
 
     [ObservableProperty]
+    private int _maxNumber = 1;
+
+    [ObservableProperty]
     private string _selectedSource = "all";
 
     public string ActionButtonText => SelectedItem?.Type.ToLower() == "manga" ? "📖 LEGGI ORA" : "▶ INIZIA A GUARDARE";
     public string NumberLabel => SelectedItem?.Type.ToLower() == "manga" ? "Capitolo:" : "Episodio:";
+
+    public string AnimeTabColor => ActiveTab == "Anime" ? "#FF640A" : "#D0D0D0";
+    public string MangaTabColor => ActiveTab == "Manga" ? "#FF640A" : "#D0D0D0";
+    public string HistoryTabColor => ActiveTab == "Cronologia" ? "#FF640A" : "#D0D0D0";
+
+    public string PageHeaderTitle => ActiveTab switch
+    {
+        "Cronologia" => "Cronologia",
+        "Anime" => "Most Popular Anime",
+        "Manga" => "Most Popular Manga",
+        _ => ActiveTab
+    };
+
+    public string PageSubHeader => ActiveTab switch
+    {
+        "Cronologia" => "Opere Guardate e Lette di Recente",
+        _ => "Popular"
+    };
 
     public ObservableCollection<MediaItem> Items { get; } = new();
 
@@ -54,13 +75,22 @@ public partial class MainViewModel : ViewModelBase
         _ = LoadInitialCatalogAsync();
     }
 
+    partial void OnActiveTabChanged(string value)
+    {
+        OnPropertyChanged(nameof(AnimeTabColor));
+        OnPropertyChanged(nameof(MangaTabColor));
+        OnPropertyChanged(nameof(HistoryTabColor));
+        OnPropertyChanged(nameof(PageHeaderTitle));
+        OnPropertyChanged(nameof(PageSubHeader));
+    }
+
     partial void OnSelectedItemChanged(MediaItem? value)
     {
         OnPropertyChanged(nameof(ActionButtonText));
         OnPropertyChanged(nameof(NumberLabel));
     }
 
-        [RelayCommand]
+    [RelayCommand]
     public async Task ShowHistoryAsync()
     {
         ActiveTab = "Cronologia";
@@ -175,7 +205,26 @@ public partial class MainViewModel : ViewModelBase
     public void SelectItem(MediaItem item)
     {
         SelectedItem = item;
-        SelectedNumber = 1;
+        MaxNumber = item.Count > 0 ? item.Count : 1;
+        SelectedNumber = item.Count > 0 ? Math.Min(item.Count, MaxNumber) : 1;
+        _ = LoadMediaDetailsAsync(item);
+    }
+
+    private async Task LoadMediaDetailsAsync(MediaItem item)
+    {
+        try
+        {
+            var total = await _cliService.GetMediaDetailsAsync(item);
+            if (SelectedItem == item && total > 0)
+            {
+                MaxNumber = total;
+                if (SelectedNumber > MaxNumber)
+                {
+                    SelectedNumber = MaxNumber;
+                }
+            }
+        }
+        catch {}
     }
 
     [RelayCommand]

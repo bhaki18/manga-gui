@@ -52,6 +52,18 @@ public class ChapterInfoResponse
     public string? Error { get; set; }
 }
 
+public class MediaDetailsResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("total")]
+    public int Total { get; set; } = 1;
+
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
+}
+
 public class MangaCliService
 {
     private readonly string _cliScriptPath;
@@ -105,6 +117,22 @@ public class MangaCliService
         {
             Console.WriteLine($"Error fetching history: {ex.Message}");
             return new List<MediaItem>();
+        }
+    }
+
+    public async Task<int> GetMediaDetailsAsync(MediaItem item)
+    {
+        try
+        {
+            var urlArg = !string.IsNullOrWhiteSpace(item.Url) ? $"--url \"{item.Url}\"" : "";
+            var srcArg = !string.IsNullOrWhiteSpace(item.Source) && item.Source != "all" ? $"--source {item.Source}" : "";
+            var json = await RunCommandAsync($"media-details {urlArg} {srcArg} --json");
+            var details = JsonSerializer.Deserialize<MediaDetailsResponse>(json);
+            return details != null && details.Total > 0 ? details.Total : 1;
+        }
+        catch
+        {
+            return 1;
         }
     }
 

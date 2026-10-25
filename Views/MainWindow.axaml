@@ -40,7 +40,7 @@
                             Padding="0"
                             FontSize="14"
                             FontWeight="SemiBold"
-                            Foreground="{Binding ActiveTab, Converter={x:Null}}"
+                            Foreground="{Binding AnimeTabColor}"
                             Cursor="Hand" />
 
                     <Button Content="Manga" 
@@ -51,7 +51,7 @@
                             Padding="0"
                             FontSize="14"
                             FontWeight="SemiBold"
-                            Foreground="#A0A0A0"
+                            Foreground="{Binding MangaTabColor}"
                             Cursor="Hand" />
 
                     <Button Content="Popolari" 
@@ -156,7 +156,7 @@
                     <!-- PAGE HEADER (MOST POPULAR ANIME + FILTER) -->
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Grid.Column="0" 
-                                   Text="{Binding ActiveTab, StringFormat='Most Popular {0}'}" 
+                                   Text="{Binding PageHeaderTitle}" 
                                    FontSize="28" 
                                    FontWeight="Bold" 
                                    Foreground="#FFFFFF"/>
@@ -168,7 +168,7 @@
                     </Grid>
 
                     <!-- SUB-HEADER CATEGORY -->
-                    <TextBlock Text="Popular" FontSize="16" FontWeight="SemiBold" Foreground="#FFFFFF" Margin="0,10,0,8"/>
+                    <TextBlock Text="{Binding PageSubHeader}" FontSize="16" FontWeight="SemiBold" Foreground="#FFFFFF" Margin="0,10,0,8"/>
 
                     <!-- VERTICAL POSTER CARDS GRID (EXACT CRUNCHYROLL STYLE) -->
                     <ItemsControl ItemsSource="{Binding Items}">
@@ -285,14 +285,20 @@
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <TextBlock Text="{Binding NumberLabel}" Foreground="#A0A0A0" FontSize="13" VerticalAlignment="Center"/>
-                            <NumericUpDown Value="{Binding SelectedNumber}" 
-                                           Minimum="1" 
-                                           Maximum="2000" 
-                                           Width="95" 
-                                           CornerRadius="4"
-                                           Background="#141519"
-                                           BorderBrush="#333333"
-                                           Foreground="#FFFFFF"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <NumericUpDown Value="{Binding SelectedNumber}" 
+                                               Minimum="1" 
+                                               Maximum="{Binding MaxNumber}" 
+                                               Width="95" 
+                                               CornerRadius="4"
+                                               Background="#141519"
+                                               BorderBrush="#333333"
+                                               Foreground="#FFFFFF"/>
+                                <TextBlock Text="{Binding MaxNumber, StringFormat='di {0}'}" 
+                                           Foreground="#A0A0A0" 
+                                           FontSize="12" 
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
                         </StackPanel>
 
                         <!-- Big Crunchyroll Orange Play Button -->
