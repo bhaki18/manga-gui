@@ -1,0 +1,125 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Text.Json;
+using System.Threading.Tasks;
+using MangaGui.Models;
+
+namespace MangaGui.Services;
+
+public class MangaCliService
+{
+    private readonly string _cliScriptPath;
+
+    public MangaCliService()
+    {
+        var localCli = "/home/adp/Desktop/manga-cli/src/cli.js";
+        _cliScriptPath = File.Exists(localCli) ? localCli : "manga-cli";
+    }
+
+    private async Task<string> RunCommandAsync(string arguments)
+    {
+        var psi = new ProcessStartInfo
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        if (_cliScriptPath.EndsWith(".js") && File.Exists(_cliScriptPath))
+        {
+            psi.FileName = "node";
+            psi.Arguments = $"\"{_cliScriptPath}\" {arguments}";
+        }
+        else
+        {
+            psi.FileName = "manga-cli";
+            psi.Arguments = arguments;
+        }
+
+        using var process = Process.Start(psi) 
+            ?? throw new InvalidOperationException("Failed to start manga-cli process");
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        return output.Trim();
+    }
+
+    public async Task<List<MediaItem>> GetAnimeCatalogAsync(string? source = null)
+    {
+        try
+        {
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
+            var json = await RunCommandAsync($"catalog anime {srcArg} --json");
+            var res = JsonSerializer.Deserialize<CatalogResponse>(json);
+            return res?.Anime ?? new List<MediaItem>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching anime catalog: {ex.Message}");
+            return new List<MediaItem>();
+        }
+    }
+
+    public async Task<List<MediaItem>> GetMangaCatalogAsync(string? source = null)
+    {
+        try
+        {
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
+            var json = await RunCommandAsync($"catalog manga {srcArg} --json");
+            var res = JsonSerializer.Deserialize<CatalogResponse>(json);
+            return res?.Manga ?? new List<MediaItem>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching manga catalog: {ex.Message}");
+            return new List<MediaItem>();
+        }
+    }
+
+    public async Task<List<MediaItem>> SearchAnimeAsync(string query, string? source = null)
+    {
+        try
+        {
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
+            var json = await RunCommandAsync($"\"{query}\" -a {srcArg} --json");
+            return JsonSerializer.Deserialize<List<MediaItem>>(json) ?? new List<MediaItem>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error searching anime: {ex.Message}");
+            return new List<MediaItem>();
+        }
+    }
+
+    public async Task<List<MediaItem>> SearchMangaAsync(string query, string? source = null, string? lang = null)
+    {
+        try
+        {
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
+            var langArg = !string.IsNullOrWhiteSpace(lang) ? $"-l {lang}" : "";
+            var json = await RunCommandAsync($"\"{query}\" -m {srcArg} {langArg} --json");
+            return JsonSerializer.Deserialize<List<MediaItem>>(json) ?? new List<MediaItem>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error searching manga: {ex.Message}");
+            return new List<MediaItem>();
+        }
+    }
+
+    public void PlayStream(string title, int episode, string? source = null)
+    {
+        var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
+        _ = RunCommandAsync($"\"{title}\" -a -e {episode} {srcArg}");
+    }
+
+    public void ReadManga(string title, int chapter, string? source = null)
+    {
+        var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
+        _ = RunCommandAsync($"\"{title}\" -m -C {chapter} {srcArg}");
+    }
+}

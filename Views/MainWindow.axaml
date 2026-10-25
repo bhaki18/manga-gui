@@ -1,0 +1,235 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MangaGui.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="720"
+        x:Class="MangaGui.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Manga &amp; Anime Hub"
+        Width="1100" Height="720"
+        MinWidth="850" MinHeight="550"
+        WindowStartupLocation="CenterScreen"
+        Background="#0F1017">
+
+    <Design.DataContext>
+        <vm:MainViewModel />
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- TOP APP BAR -->
+        <Border Grid.Row="0" Background="#161824" BorderBrush="#252836" BorderThickness="0,0,0,1" Padding="20,15">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                <!-- Logo & Brand -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Border CornerRadius="8" Background="LinearGradient(0%,0% to 100%,100%, #6366F1, #A855F7)" Width="36" Height="36">
+                        <TextBlock Text="🎬" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="Manga &amp; Anime Hub" FontWeight="Bold" FontSize="18" VerticalAlignment="Center" Foreground="#F3F4F6"/>
+                </StackPanel>
+
+                <!-- Navigation Tabs (Anime / Manga) -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="30,0,0,0" VerticalAlignment="Center">
+                    <Button Content="🎬 Anime" 
+                            Command="{Binding SwitchTabCommand}" 
+                            CommandParameter="Anime"
+                            CornerRadius="20"
+                            Padding="16,8"
+                            FontWeight="SemiBold"
+                            Background="{Binding ActiveTab, Converter={x:Null}}" />
+                    <Button Content="📖 Manga" 
+                            Command="{Binding SwitchTabCommand}" 
+                            CommandParameter="Manga"
+                            CornerRadius="20"
+                            Padding="16,8"
+                            FontWeight="SemiBold" />
+                </StackPanel>
+
+                <!-- Search Input Box -->
+                <Grid Grid.Column="2" Margin="25,0" MaxWidth="450">
+                    <TextBox Text="{Binding SearchQuery}" 
+                             PlaceholderText="Cerca anime o manga per titolo... (premi Invio)" 
+                             CornerRadius="20"
+                             Padding="15,8,40,8"
+                             Background="#1F2232"
+                             BorderBrush="#32364B"
+                             Foreground="#FFFFFF">
+                        <TextBox.KeyBindings>
+                            <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
+                        </TextBox.KeyBindings>
+                    </TextBox>
+                    <Button Command="{Binding SearchCommand}"
+                            HorizontalAlignment="Right"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="12,0"
+                            Content="🔍" 
+                            Cursor="Hand" />
+                </Grid>
+
+                <!-- Source Filter Dropdown -->
+                <ComboBox Grid.Column="3" 
+                          ItemsSource="{Binding Sources}" 
+                          SelectedItem="{Binding SelectedSource}"
+                          CornerRadius="10"
+                          Background="#1F2232"
+                          BorderBrush="#32364B"
+                          Width="160"
+                          VerticalAlignment="Center"
+                          Margin="0,0,10,0"/>
+
+                <!-- Refresh Catalog Button -->
+                <Button Grid.Column="4"
+                        Command="{Binding LoadCatalogCommand}"
+                        Content="🔄 Catalogo"
+                        CornerRadius="10"
+                        Background="#252836"
+                        BorderBrush="#373B52"
+                        Padding="12,8"
+                        VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <!-- MAIN CONTENT (ITEMS GRID & DETAIL PANEL) -->
+        <Grid Grid.Row="1">
+            <!-- Loading Indicator -->
+            <ProgressBar IsIndeterminate="True" 
+                         IsVisible="{Binding IsLoading}" 
+                         Height="3" 
+                         VerticalAlignment="Top" 
+                         Foreground="#A855F7"/>
+
+            <!-- Items Grid -->
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="25">
+                <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Command="{Binding ((vm:MainViewModel)DataContext).SelectItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Padding="0"
+                                    Margin="0,0,18,18">
+                                <Border Width="230" 
+                                        Height="150" 
+                                        CornerRadius="14" 
+                                        Background="#181A27" 
+                                        BorderBrush="#25283B" 
+                                        BorderThickness="1" 
+                                        Padding="14"
+                                        ClipToBounds="True">
+                                    <Grid RowDefinitions="Auto,*,Auto">
+                                        <!-- Card Header: Type Icon & Source Pill -->
+                                        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
+                                            <TextBlock Grid.Column="0" Text="{Binding TypeIcon}" FontSize="14" VerticalAlignment="Center"/>
+                                            <Border Grid.Column="2" 
+                                                    CornerRadius="6" 
+                                                    Padding="8,2" 
+                                                    Background="#25283B">
+                                                <TextBlock Text="{Binding SourceLabel}" 
+                                                           FontSize="10" 
+                                                           FontWeight="Medium" 
+                                                           Foreground="#9CA3AF"/>
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Title -->
+                                        <TextBlock Grid.Row="1" 
+                                                   Text="{Binding Title}" 
+                                                   FontWeight="Bold" 
+                                                   FontSize="14" 
+                                                   Foreground="#F9FAFB" 
+                                                   TextWrapping="Wrap" 
+                                                   MaxLines="3"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,8"/>
+
+                                        <!-- Footer Badge -->
+                                        <Border Grid.Row="2" 
+                                                HorizontalAlignment="Left"
+                                                CornerRadius="6" 
+                                                Padding="8,3" 
+                                                Background="{Binding BadgeColor}">
+                                            <TextBlock Text="{Binding AudioBadge}" 
+                                                       FontSize="10" 
+                                                       FontWeight="Bold" 
+                                                       Foreground="#FFFFFF"/>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- DETAIL OVERLAY / FLYOUT FOR SELECTED ITEM -->
+            <Border Background="#E60D0E15" 
+                    BorderBrush="#2E3248" 
+                    BorderThickness="0,1,0,0"
+                    VerticalAlignment="Bottom"
+                    Padding="25,20"
+                    IsVisible="{Binding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                    <!-- Left: Selected Media Info -->
+                    <StackPanel Grid.Column="0" Spacing="6" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="{Binding SelectedItem.TypeIcon}" FontSize="18" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding SelectedItem.Title}" FontWeight="Bold" FontSize="18" Foreground="#FFFFFF"/>
+                            <Border CornerRadius="6" Padding="8,2" Background="{Binding SelectedItem.BadgeColor}">
+                                <TextBlock Text="{Binding SelectedItem.AudioBadge}" FontSize="11" FontWeight="Bold" Foreground="#FFFFFF"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="{Binding SelectedItem.SourceLabel, StringFormat='Fonte: {0}'}" 
+                                   Foreground="#9CA3AF" FontSize="12"/>
+                    </StackPanel>
+
+                    <!-- Right: Number selection & Action Button -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <TextBlock Text="Numero:" VerticalAlignment="Center" Foreground="#D1D5DB" FontSize="13"/>
+                            <NumericUpDown Value="{Binding SelectedNumber}" 
+                                           Minimum="1" 
+                                           Maximum="2000" 
+                                           Width="90" 
+                                           CornerRadius="8"
+                                           Background="#1F2232"/>
+                        </StackPanel>
+
+                        <Button Command="{Binding PlayOrReadCommand}" 
+                                Padding="20,10" 
+                                CornerRadius="10" 
+                                Background="LinearGradient(0%,0% to 100%,100%, #3B82F6, #8B5CF6)"
+                                Foreground="#FFFFFF"
+                                FontWeight="Bold"
+                                Cursor="Hand">
+                            <TextBlock Text="▶️ Avvia Ora"/>
+                        </Button>
+
+                        <Button Command="{Binding CloseDetailsCommand}" 
+                                Content="✕" 
+                                Background="#252836" 
+                                CornerRadius="8" 
+                                Padding="12,10"
+                                Cursor="Hand"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- BOTTOM STATUS BAR -->
+        <Border Grid.Row="2" Background="#12131D" BorderBrush="#1F2232" BorderThickness="0,1,0,0" Padding="15,6">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{Binding StatusText}" Foreground="#9CA3AF" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="manga-gui v1.0.0" Foreground="#4B5563" FontSize="12" VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
