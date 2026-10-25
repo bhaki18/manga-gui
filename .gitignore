@@ -1,5 +1,13 @@
+# Build and publish outputs
 bin/
 obj/
+publish/
+pkg/
+src/
+*.pkg.tar.zst
+*.pdb
+
+# IDE and tooling
 *.user
 *.suo
 .vs/
