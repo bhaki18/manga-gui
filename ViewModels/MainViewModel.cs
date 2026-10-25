@@ -104,10 +104,49 @@ public partial class MainViewModel : ViewModelBase
         "mangapill"
     };
 
-    public MainViewModel()
+    public MainViewModel(string[]? args = null)
     {
         _cliService = new MangaCliService();
+        ParseCommandLineArgs(args);
         _ = LoadInitialCatalogAsync();
+    }
+
+    private void ParseCommandLineArgs(string[]? args)
+    {
+        if (args == null || args.Length == 0) return;
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            var arg = args[i].ToLowerInvariant();
+            if (arg == "--anime" || arg == "-a")
+            {
+                ActiveTab = "Anime";
+            }
+            else if (arg == "--manga" || arg == "-m")
+            {
+                ActiveTab = "Manga";
+            }
+            else if (arg == "--downloaded" || arg == "--downloads" || arg == "-d")
+            {
+                ActiveTab = "Downloaded";
+            }
+            else if (arg == "--history" || arg == "-h" || arg == "-H")
+            {
+                ActiveTab = "History";
+            }
+            else if ((arg == "--search" || arg == "-q") && i + 1 < args.Length)
+            {
+                SearchQuery = args[++i];
+            }
+            else if (arg == "--source" && i + 1 < args.Length)
+            {
+                SelectedSource = args[++i];
+            }
+            else if (!arg.StartsWith("-") && string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                SearchQuery = args[i];
+            }
+        }
     }
 
     partial void OnSelectedSourceChanged(string value)
@@ -605,6 +644,21 @@ public partial class MainViewModel : ViewModelBase
 
     private async Task LoadInitialCatalogAsync()
     {
-        await LoadCatalogAsync();
+        if (!string.IsNullOrWhiteSpace(SearchQuery))
+        {
+            await SearchAsync();
+        }
+        else if (ActiveTab == "Downloaded")
+        {
+            await ShowDownloadedAsync();
+        }
+        else if (ActiveTab == "History")
+        {
+            await ShowHistoryAsync();
+        }
+        else
+        {
+            await LoadCatalogAsync();
+        }
     }
 }

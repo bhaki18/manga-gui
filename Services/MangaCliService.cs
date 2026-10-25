@@ -48,7 +48,7 @@ public class MangaCliService
 
         if (_cliScriptPath.EndsWith(".js") && File.Exists(_cliScriptPath))
         {
-            psi.FileName = "node";
+            psi.FileName = ResolveNodePath();
             psi.Arguments = $"\"{_cliScriptPath}\" {arguments}";
             var cliDir = Path.GetDirectoryName(Path.GetDirectoryName(_cliScriptPath));
             if (!string.IsNullOrEmpty(cliDir) && Directory.Exists(cliDir))
@@ -573,7 +573,7 @@ public class MangaCliService
             {
                 var mpvPsi = new ProcessStartInfo
                 {
-                    FileName = "mpv",
+                    FileName = ResolveMpvPath(),
                     Arguments = $"\"{streamUrl.Trim()}\" --title=\"{item.Title} - Episode {episode}\" --force-window=immediate",
                     UseShellExecute = false,
                     RedirectStandardOutput = false,
@@ -611,7 +611,7 @@ public class MangaCliService
                 {
                     var localPsi = new ProcessStartInfo
                     {
-                        FileName = "mpv",
+                        FileName = ResolveMpvPath(),
                         Arguments = $"--title=\"{item.Title} - Chapter {chapter} (Offline)\" --image-display-duration=inf \"{localChapterDir}\"",
                         UseShellExecute = false,
                         RedirectStandardOutput = false,
@@ -670,7 +670,7 @@ public class MangaCliService
 
                 var mpvPsi = new ProcessStartInfo
                 {
-                    FileName = "mpv",
+                    FileName = ResolveMpvPath(),
                     Arguments = $"--title=\"{item.Title} - Chapter {chapter}\" --image-display-duration=inf {refArg} --playlist=\"{playlistFile}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = false,
@@ -923,8 +923,27 @@ public class MangaCliService
         return null;
     }
 
+    public static string ResolveMpvPath()
+    {
+        var baseDir = AppContext.BaseDirectory;
+        var exeName = OperatingSystem.IsWindows() ? "mpv.exe" : "mpv";
+        var local = Path.Combine(baseDir, exeName);
+        if (File.Exists(local)) return local;
+        return exeName;
+    }
+
+    public static string ResolveNodePath()
+    {
+        var baseDir = AppContext.BaseDirectory;
+        var exeName = OperatingSystem.IsWindows() ? "node.exe" : "node";
+        var local = Path.Combine(baseDir, exeName);
+        if (File.Exists(local)) return local;
+        return exeName;
+    }
+
     private static void PassDisplayEnv(ProcessStartInfo psi)
     {
+        if (OperatingSystem.IsWindows()) return;
         var display = Environment.GetEnvironmentVariable("DISPLAY");
         if (!string.IsNullOrEmpty(display)) psi.Environment["DISPLAY"] = display;
 
@@ -934,4 +953,5 @@ public class MangaCliService
         var xdg = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
         if (!string.IsNullOrEmpty(xdg)) psi.Environment["XDG_RUNTIME_DIR"] = xdg;
     }
+
 }
