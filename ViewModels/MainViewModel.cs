@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.IO;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -26,6 +28,18 @@ public partial class MainViewModel : ViewModelBase
     private string _statusText = "Ready";
 
     [ObservableProperty]
+    private bool _isDownloading;
+
+    [ObservableProperty]
+    private string _downloadProgressText = string.Empty;
+
+    public string DownloadedTabColor => (ActiveTab == "Downloaded" || ActiveTab == "Downloads") ? "#FF640A" : "#D0D0D0";
+    public bool IsDownloadedTabActive => ActiveTab == "Downloaded" || ActiveTab == "Downloads";
+    public string DownloadIconText => IsDownloading ? "⏳" : "⬇";
+    public string DownloadButtonText => IsDownloading ? (!string.IsNullOrWhiteSpace(DownloadProgressText) ? $"DOWNLOADING ({DownloadProgressText})" : "DOWNLOADING...") : "DOWNLOAD";
+
+
+    [ObservableProperty]
     private MediaItem? _selectedItem;
 
     [ObservableProperty]
@@ -48,7 +62,9 @@ public partial class MainViewModel : ViewModelBase
 
     private Func<Task>? _pendingConfirmAsyncAction;
 
-    public string ActionButtonText => SelectedItem?.Type.ToLower() == "manga" ? "📖 READ NOW" : "▶ START WATCHING";
+    public string ActionButtonText => SelectedItem?.IsDownloaded == true
+        ? (SelectedItem?.Type.ToLower() == "manga" ? "📖 READ OFFLINE" : "▶ PLAY OFFLINE")
+        : (SelectedItem?.Type.ToLower() == "manga" ? "📖 READ NOW" : "▶ START WATCHING");
     public string NumberLabel => SelectedItem?.Type.ToLower() == "manga" ? "Chapter:" : "Episode:";
 
     public bool IsCurrentNumberWatched => SelectedItem != null && SelectedItem.WatchedNumbers != null && SelectedItem.WatchedNumbers.Contains((int)SelectedNumber);
@@ -62,6 +78,7 @@ public partial class MainViewModel : ViewModelBase
 
     public string PageHeaderTitle => ActiveTab switch
     {
+        "Downloaded" or "Downloads" => "Downloaded",
         "History" or "Cronologia" => "History",
         "Anime" => "Most Popular Anime",
         "Manga" => "Most Popular Manga",
@@ -70,6 +87,7 @@ public partial class MainViewModel : ViewModelBase
 
     public string PageSubHeader => ActiveTab switch
     {
+        "Downloaded" or "Downloads" => "Installed Anime & Manga (.config/manga-gui/Downloaded)",
         "History" or "Cronologia" => "Recently Watched & Read",
         _ => "Popular"
     };
@@ -104,10 +122,12 @@ public partial class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(AnimeTabColor));
         OnPropertyChanged(nameof(MangaTabColor));
+        OnPropertyChanged(nameof(DownloadedTabColor));
         OnPropertyChanged(nameof(HistoryTabColor));
         OnPropertyChanged(nameof(PageHeaderTitle));
         OnPropertyChanged(nameof(PageSubHeader));
         OnPropertyChanged(nameof(IsHistoryTabActive));
+        OnPropertyChanged(nameof(IsDownloadedTabActive));
     }
 
     partial void OnSelectedItemChanged(MediaItem? value)
@@ -141,6 +161,98 @@ public partial class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsCurrentNumberWatched));
         OnPropertyChanged(nameof(WatchedStatusBadge));
+    }
+
+    [RelayCommand]
+    public async Task ShowDownloadedAsync()
+    {
+        ActiveTab = "Downloaded";
+        SelectedItem = null;
+        SearchQuery = string.Empty;
+        IsLoading = true;
+        StatusText = "Scanning installed files in ~/.config/manga-gui/Downloaded...";
+        Items.Clear();
+
+        try
+        {
+            var downloaded = await _cliService.GetDownloadedItemsAsync();
+            foreach (var item in downloaded)
+            {
+                Items.Add(item);
+            }
+            StatusText = Items.Count == 0 
+                ? "No downloaded anime or manga found in ~/.config/manga-gui/Downloaded." 
+                : $"Downloaded: {Items.Count} titles installed offline.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Downloads error: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    [RelayCommand]
+    public void OpenDownloadsFolder()
+    {
+        try
+        {
+            var baseDir = MangaCliService.GetBaseDownloadDirectory();
+            if (!Directory.Exists(baseDir)) Directory.CreateDirectory(baseDir);
+            Process.Start(new ProcessStartInfo("xdg-open", baseDir) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Could not open folder: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    public async Task DownloadCurrentItemAsync()
+    {
+        if (SelectedItem == null || IsDownloading) return;
+        var num = (int)SelectedNumber;
+        var title = SelectedItem.Title;
+        var unit = SelectedItem.Type.ToLower() == "manga" ? "Chapter" : "Episode";
+
+        IsDownloading = true;
+        OnPropertyChanged(nameof(IsDownloading));
+        OnPropertyChanged(nameof(DownloadIconText));
+        OnPropertyChanged(nameof(DownloadButtonText));
+        StatusText = $"Downloading {title} ({unit} {num})...";
+
+        try
+        {
+            DownloadProgressText = string.Empty;
+            var (success, msg, dest) = await _cliService.DownloadMediaAsync(SelectedItem, num, (string prog) =>
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    DownloadProgressText = prog;
+                    StatusText = $"Downloading {title} ({unit} {num}): {prog}";
+                    OnPropertyChanged(nameof(DownloadButtonText));
+                });
+            });
+            StatusText = msg;
+            if (success && (ActiveTab == "Downloaded" || ActiveTab == "Downloads"))
+            {
+                await ShowDownloadedAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Download error: {ex.Message}";
+        }
+        finally
+        {
+            IsDownloading = false;
+            DownloadProgressText = string.Empty;
+            OnPropertyChanged(nameof(IsDownloading));
+            OnPropertyChanged(nameof(DownloadIconText));
+            OnPropertyChanged(nameof(DownloadButtonText));
+        }
     }
 
     [RelayCommand]
@@ -179,7 +291,15 @@ public partial class MainViewModel : ViewModelBase
         ActiveTab = tabName;
         SelectedItem = null;
         SearchQuery = string.Empty;
-        await LoadCatalogAsync();
+
+        if (tabName == "Downloaded" || tabName == "Downloads")
+        {
+            await ShowDownloadedAsync();
+        }
+        else
+        {
+            await LoadCatalogAsync();
+        }
     }
 
     [RelayCommand]
@@ -343,6 +463,29 @@ public partial class MainViewModel : ViewModelBase
     {
         if (SelectedItem == null) return;
         var title = SelectedItem.Title;
+
+        if (SelectedItem.IsDownloaded)
+        {
+            ConfirmDialogTitle = "Delete Downloaded Title?";
+            ConfirmDialogMessage = $"Are you sure you want to delete \"{title}\" and all its downloaded files from disk?";
+            _pendingConfirmAsyncAction = async () =>
+            {
+                StatusText = $"Deleting \"{title}\" from disk...";
+                var ok = await _cliService.DeleteDownloadedItemAsync(SelectedItem);
+                if (ok)
+                {
+                    Items.Remove(SelectedItem);
+                    SelectedItem = null;
+                    StatusText = $"✔ Deleted \"{title}\" from disk.";
+                }
+                else
+                {
+                    StatusText = $"Could not delete \"{title}\".";
+                }
+            };
+            IsConfirmDialogVisible = true;
+            return;
+        }
         ConfirmDialogTitle = "Remove from History?";
         ConfirmDialogMessage = $"Are you sure you want to remove \"{title}\" from history?";
         _pendingConfirmAsyncAction = async () =>
@@ -397,8 +540,55 @@ public partial class MainViewModel : ViewModelBase
     public async Task PlayOrReadAsync()
     {
         if (SelectedItem == null) return;
-
         var num = (int)SelectedNumber;
+
+        if (SelectedItem.IsDownloaded && !string.IsNullOrWhiteSpace(SelectedItem.LocalPath))
+        {
+            try
+            {
+                if (SelectedItem.Type.ToLower() == "anime")
+                {
+                    var videoFiles = Directory.GetFiles(SelectedItem.LocalPath, "*.*", SearchOption.AllDirectories)
+                        .Where(f => f.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) || 
+                                    f.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) ||
+                                    f.EndsWith(".webm", StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                    var targetFile = videoFiles.FirstOrDefault(f => f.Contains($"{num}")) ?? videoFiles.FirstOrDefault();
+                    if (targetFile != null)
+                    {
+                        var psi = new ProcessStartInfo
+                        {
+                            FileName = "mpv",
+                            Arguments = $"\"{targetFile}\" --title=\"{SelectedItem.Title} (Episode {num} - Offline)\"",
+                            UseShellExecute = false
+                        };
+                        Process.Start(psi);
+                        StatusText = $"Playing offline: {SelectedItem.Title} ({Path.GetFileName(targetFile)})";
+                        return;
+                    }
+                }
+                else
+                {
+                    var subDirs = Directory.GetDirectories(SelectedItem.LocalPath);
+                    var targetDir = subDirs.FirstOrDefault(d => d.Contains($"{num}")) ?? subDirs.FirstOrDefault() ?? SelectedItem.LocalPath;
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "mpv",
+                        Arguments = $"\"{targetDir}\" --image-display-duration=inf --title=\"{SelectedItem.Title} (Chapter {num} - Offline)\"",
+                        UseShellExecute = false
+                    };
+                    Process.Start(psi);
+                    StatusText = $"Reading offline: {SelectedItem.Title} ({Path.GetFileName(targetDir)})";
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"Offline playback error: {ex.Message}";
+                return;
+            }
+        }
         if (SelectedItem.Type.ToLower() == "anime")
         {
             StatusText = $"Loading stream for {SelectedItem.Title} (Episode {num})...";

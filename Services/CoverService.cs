@@ -109,28 +109,46 @@ public class CoverService
         try
         {
             var endpoint = type.ToLower() == "manga" ? "manga" : "anime";
-            var reqUrl = $"https://kitsu.io/api/edge/{endpoint}?filter[text]={Uri.EscapeDataString(cleanTitle)}&page[limit]=1";
+            var reqUrl = $"https://kitsu.io/api/edge/{endpoint}?filter[text]={Uri.EscapeDataString(cleanTitle)}&page[limit]=5";
             var res = await _httpClient.GetAsync(reqUrl);
             if (res.IsSuccessStatusCode)
             {
                 var body = await res.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(body);
                 if (doc.RootElement.TryGetProperty("data", out var data) && 
-                    data.ValueKind == JsonValueKind.Array && 
-                    data.GetArrayLength() > 0)
+                    data.ValueKind == JsonValueKind.Array)
                 {
-                    var item = data[0];
-                    if (item.TryGetProperty("attributes", out var attrs) &&
-                        attrs.TryGetProperty("posterImage", out var poster) &&
-                        poster.ValueKind == JsonValueKind.Object)
+                    foreach (var item in data.EnumerateArray())
                     {
-                        var posterUrl = poster.TryGetProperty("medium", out var m) ? m.GetString() :
-                                        poster.TryGetProperty("small", out var s) ? s.GetString() :
-                                        poster.TryGetProperty("original", out var o) ? o.GetString() : null;
-
-                        if (!string.IsNullOrWhiteSpace(posterUrl))
+                        if (item.TryGetProperty("attributes", out var attrs))
                         {
-                            return posterUrl;
+                            var canonical = attrs.TryGetProperty("canonicalTitle", out var ct) ? ct.GetString() : null;
+                            string? enTitle = null;
+                            string? enJpTitle = null;
+                            if (attrs.TryGetProperty("titles", out var titlesObj) && titlesObj.ValueKind == JsonValueKind.Object)
+                            {
+                                if (titlesObj.TryGetProperty("en", out var en)) enTitle = en.GetString();
+                                if (titlesObj.TryGetProperty("en_jp", out var enjp)) enJpTitle = enjp.GetString();
+                            }
+
+                            bool matched = IsTitleMatch(cleanTitle, canonical) ||
+                                           IsTitleMatch(cleanTitle, enTitle) ||
+                                           IsTitleMatch(cleanTitle, enJpTitle);
+
+                            if (!matched) continue;
+
+                            if (attrs.TryGetProperty("posterImage", out var poster) &&
+                                poster.ValueKind == JsonValueKind.Object)
+                            {
+                                var posterUrl = poster.TryGetProperty("medium", out var m) ? m.GetString() :
+                                                poster.TryGetProperty("small", out var s) ? s.GetString() :
+                                                poster.TryGetProperty("original", out var o) ? o.GetString() : null;
+
+                                if (!string.IsNullOrWhiteSpace(posterUrl))
+                                {
+                                    return posterUrl;
+                                }
+                            }
                         }
                     }
                 }
@@ -146,7 +164,7 @@ public class CoverService
         try
         {
             var mediaType = type.ToLower() == "manga" ? "MANGA" : "ANIME";
-            var query = "query ($search: String, $type: MediaType) { Media(search: $search, type: $type) { coverImage { large medium } } }";
+            var query = "query ($search: String, $type: MediaType) { Media(search: $search, type: $type) { title { romaji english } coverImage { large medium } } }";
             var payload = new
             {
                 query,
@@ -161,11 +179,24 @@ public class CoverService
                 using var doc = JsonDocument.Parse(body);
                 if (doc.RootElement.TryGetProperty("data", out var data) &&
                     data.TryGetProperty("Media", out var media) &&
-                    media.ValueKind != JsonValueKind.Null &&
-                    media.TryGetProperty("coverImage", out var cover))
+                    media.ValueKind != JsonValueKind.Null)
                 {
-                    return cover.TryGetProperty("large", out var l) ? l.GetString() :
-                           cover.TryGetProperty("medium", out var m) ? m.GetString() : null;
+                    string? romaji = null;
+                    string? english = null;
+                    if (media.TryGetProperty("title", out var tObj) && tObj.ValueKind == JsonValueKind.Object)
+                    {
+                        if (tObj.TryGetProperty("romaji", out var r)) romaji = r.GetString();
+                        if (tObj.TryGetProperty("english", out var e)) english = e.GetString();
+                    }
+
+                    if (IsTitleMatch(cleanTitle, romaji) || IsTitleMatch(cleanTitle, english))
+                    {
+                        if (media.TryGetProperty("coverImage", out var cover) && cover.ValueKind == JsonValueKind.Object)
+                        {
+                            return cover.TryGetProperty("large", out var l) ? l.GetString() :
+                                   cover.TryGetProperty("medium", out var m) ? m.GetString() : null;
+                        }
+                    }
                 }
             }
         }
@@ -174,13 +205,71 @@ public class CoverService
         return null;
     }
 
+    private static bool IsTitleMatch(string query, string? candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate)) return false;
+        var qNorm = NormalizeForMatch(query);
+        var cNorm = NormalizeForMatch(candidate);
+
+        if (string.IsNullOrWhiteSpace(qNorm) || string.IsNullOrWhiteSpace(cNorm)) return false;
+        if (qNorm == cNorm || cNorm.Contains(qNorm) || qNorm.Contains(cNorm)) return true;
+
+        var qWords = qNorm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var cWords = cNorm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (qWords.Length == 0 || cWords.Length == 0) return false;
+
+        if (qWords.Length <= 2)
+        {
+            foreach (var w in qWords)
+            {
+                if (w.Length > 2 && !cNorm.Contains(w)) return false;
+            }
+            return true;
+        }
+
+        int matchCount = 0;
+        int totalSignificant = 0;
+        foreach (var w in qWords)
+        {
+            if (w.Length <= 2) continue;
+            totalSignificant++;
+            if (cNorm.Contains(w)) matchCount++;
+        }
+
+        return totalSignificant > 0 && ((double)matchCount / totalSignificant) >= 0.5;
+    }
+
+    private static string NormalizeForMatch(string str)
+    {
+        return Regex.Replace(str.ToLowerInvariant(), @"[^a-z0-9\s]", " ")
+                    .Replace("  ", " ")
+                    .Trim();
+    }
+
     public static string CleanTitle(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return "";
 
-        var s = Regex.Replace(raw, @"\b(ita|sub\s*ita|subita|english\s*sub|sub\s*eng|eng\s*sub|doppiato|special|movie|film|ova|ona)\b", "", RegexOptions.IgnoreCase);
-        s = Regex.Replace(s, @"\b(ita/sub\s*ita|ita\s*/\s*sub\s*ita|sub\s*\|\s*dub)\b", "", RegexOptions.IgnoreCase);
-        s = Regex.Replace(s, @"[\(\)\[\]/]", " ");
+        // Strip bracketed content containing metadata
+        var s = Regex.Replace(raw, @"\[[^\]]*\]|\([^\)]*\)", m =>
+        {
+            var val = m.Value.ToLowerInvariant();
+            if (val.Contains("sub") || val.Contains("ita") || val.Contains("dub") || 
+                val.Contains("eng") || val.Contains("raw") || val.Contains("doppiat") ||
+                val.Contains("film") || val.Contains("movie") || val.Contains("special") ||
+                val.Contains("edition") || val.Contains("all"))
+            {
+                return " ";
+            }
+            return m.Value;
+        });
+
+        // Strip standalone keywords
+        s = Regex.Replace(s, @"\b(ita|sub|dub|subita|subeng|eng|doppiato|special|specials|movie|film|ova|ona|oav|raw)\b", " ", RegexOptions.IgnoreCase);
+
+        // Strip symbols and normalize spaces
+        s = Regex.Replace(s, @"[()\[\]/\\_: -]+", " ");
         s = Regex.Replace(s, @"\s+", " ").Trim();
         return string.IsNullOrWhiteSpace(s) ? raw : s;
     }

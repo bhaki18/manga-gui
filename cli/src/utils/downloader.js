@@ -12,7 +12,7 @@ function sanitizeFilename(name) {
 
 function getDefaultDownloadDir(type, title) {
   const home = os.homedir();
-  const base = path.join(home, 'Downloads', type === 'anime' ? 'Anime' : 'Manga');
+  const base = path.join(home, '.config', 'manga-gui', 'Downloaded', type === 'anime' ? 'Anime' : 'Manga');
   const safeTitle = sanitizeFilename(title);
   return path.join(base, safeTitle);
 }
@@ -64,7 +64,9 @@ async function downloadMangaChapter(pages, mangaTitle, chapterTitle, referer, cu
           await downloadToFile(pageUrl, destPath, referer);
         }
         downloadedCount++;
-        spinner.text = `Downloading pages: ${downloadedCount}/${pageList.length}`;
+        const pct = Math.round((downloadedCount / pageList.length) * 100);
+        console.log(`[PROGRESS] ${downloadedCount}/${pageList.length} (${pct}%)`);
+        spinner.text = `Downloading pages: ${downloadedCount}/${pageList.length} (${pct}%)`;
       })
     );
   }
@@ -104,10 +106,34 @@ async function downloadAnimeEpisode(streamUrl, animeTitle, episodeTitle, referer
       streamUrl
     ];
 
-    const child = spawn('curl', args, { stdio: 'inherit' });
+    const child = spawn('curl', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+
+    let lastSize = 0;
+    const progressTimer = setInterval(() => {
+      try {
+        if (fs.existsSync(destPath)) {
+          const stats = fs.statSync(destPath);
+          if (stats.size > lastSize) {
+            lastSize = stats.size;
+            const mb = (stats.size / (1024 * 1024)).toFixed(1);
+            console.log(`[PROGRESS] ${mb} MB`);
+          }
+        }
+      } catch (e) {}
+    }, 800);
+
+    child.stderr.on('data', (data) => {
+      const str = data.toString();
+      const match = str.match(/(\d+(?:\.\d+)?)\s*%/);
+      if (match) {
+        console.log(`[PROGRESS] ${match[1]}%`);
+      }
+    });
 
     child.on('close', (code) => {
+      clearInterval(progressTimer);
       if (code === 0) {
+        console.log(`[PROGRESS] 100%`);
         console.log(chalk.green(`\n✔ Download complete: ${destPath}`));
         resolve(destPath);
       } else {

@@ -54,6 +54,17 @@
                             Foreground="{Binding MangaTabColor}"
                             Cursor="Hand" />
 
+                    <Button Content="Downloaded" 
+                            Command="{Binding SwitchTabCommand}" 
+                            CommandParameter="Downloaded"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Foreground="{Binding DownloadedTabColor}"
+                            Cursor="Hand" />
+
 
 
                     <!-- Source Selector -->
@@ -143,22 +154,40 @@
                                    FontWeight="Bold" 
                                    Foreground="#FFFFFF"/>
 
-                        <!-- Clear All History Button (Visible only on Cronologia tab) -->
-                        <Button Grid.Column="1"
-                                Command="{Binding RequestClearAllHistoryCommand}"
-                                IsVisible="{Binding IsHistoryTabActive}"
-                                Background="#2A1B1B"
-                                BorderBrush="#E53935"
-                                BorderThickness="1"
-                                Padding="12,8"
-                                CornerRadius="4"
-                                Cursor="Hand"
-                                VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="🗑" FontSize="13" VerticalAlignment="Center"/>
-                                <TextBlock Text="Clear All History" FontSize="12" FontWeight="Bold" Foreground="#FF7070" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
+                        <!-- Action buttons for History or Downloads -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <!-- Clear All History Button (Visible only on History tab) -->
+                            <Button Command="{Binding RequestClearAllHistoryCommand}"
+                                    IsVisible="{Binding IsHistoryTabActive}"
+                                    Background="#2A1B1B"
+                                    BorderBrush="#E53935"
+                                    BorderThickness="1"
+                                    Padding="12,8"
+                                    CornerRadius="4"
+                                    Cursor="Hand"
+                                    VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="🗑" FontSize="13" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Clear All History" FontSize="12" FontWeight="Bold" Foreground="#FF7070" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Open Downloads Folder Button (Visible only on Downloads tab) -->
+                            <Button Command="{Binding OpenDownloadsFolderCommand}"
+                                    IsVisible="{Binding IsDownloadedTabActive}"
+                                    Background="#18191E"
+                                    BorderBrush="#33343E"
+                                    BorderThickness="1"
+                                    Padding="12,8"
+                                    CornerRadius="4"
+                                    Cursor="Hand"
+                                    VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="📁" FontSize="13" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Open Downloads Folder" FontSize="12" FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
                     </Grid>
 
                     <!-- SUB-HEADER CATEGORY -->
@@ -263,16 +292,23 @@
                         <Image loader:ImageLoader.Source="{Binding SelectedItem.Image}" Stretch="UniformToFill"/>
                     </Border>
 
-                    <!-- Middle: Title & Metadata -->
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6">
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <TextBlock Text="{Binding SelectedItem.Title}" FontWeight="Black" FontSize="20" Foreground="#FFFFFF"/>
-                            <Border CornerRadius="4" Padding="6,2" Background="#FF640A" VerticalAlignment="Center">
+                    <!-- Middle: Title & Metadata (Strictly bounded and clipped to prevent overlap with buttons) -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6" Margin="0,0,25,0" ClipToBounds="True">
+                        <DockPanel LastChildFill="True">
+                            <Border DockPanel.Dock="Right" CornerRadius="4" Padding="6,2" Background="#FF640A" VerticalAlignment="Center" Margin="10,0,0,0">
                                 <TextBlock Text="{Binding SelectedItem.AudioBadge}" FontSize="10" FontWeight="Black" Foreground="#000000"/>
                             </Border>
-                        </StackPanel>
-                        <TextBlock Text="{Binding SelectedItem.SubDubText}" FontSize="13" Foreground="#FF640A" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding SelectedItem.SourceLabel, StringFormat='Source provider: {0}'}" FontSize="12" Foreground="#808080"/>
+                            <TextBlock Text="{Binding SelectedItem.Title}" 
+                                       FontWeight="Black" 
+                                       FontSize="18" 
+                                       Foreground="#FFFFFF" 
+                                       TextWrapping="Wrap" 
+                                       MaxLines="2" 
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <TextBlock Text="{Binding SelectedItem.SubDubText}" FontSize="13" Foreground="#FF640A" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding SelectedItem.SourceLabel, StringFormat='Source provider: {0}'}" FontSize="12" Foreground="#808080" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
 
                     <!-- Right: Episode/Chapter Picker & Action Buttons (FIXED POSITIONS) -->
@@ -368,6 +404,25 @@
                                 MinWidth="165"
                                 VerticalAlignment="Center">
                             <TextBlock Text="{Binding ActionButtonText}" FontSize="13" FontWeight="Black" Foreground="#000000" HorizontalAlignment="Center"/>
+                        </Button>
+
+                        <!-- 3. Download Button -->
+                        <Button Command="{Binding DownloadCurrentItemCommand}"
+                                ToolTip.Tip="Download this episode/chapter for offline viewing"
+                                Padding="16,14"
+                                CornerRadius="4"
+                                Background="#1E1F26"
+                                BorderBrush="#33343E"
+                                BorderThickness="1"
+                                Foreground="#FFFFFF"
+                                FontWeight="Bold"
+                                Cursor="Hand"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding !IsDownloading}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{Binding DownloadIconText}" FontSize="13" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding DownloadButtonText}" FontSize="13" FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </Button>
 
                         <!-- 3. Utility buttons (Trash & Close in FIXED POSITIONS) -->

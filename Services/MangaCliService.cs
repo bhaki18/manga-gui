@@ -1,3 +1,4 @@
+using System.Text;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -35,7 +36,7 @@ public class MangaCliService
         _cliScriptPath = candidates.FirstOrDefault(File.Exists) ?? "manga-cli";
     }
 
-    private async Task<string> RunCommandAsync(string arguments)
+        private async Task<string> RunCommandWithProgressAsync(string arguments, Action<string>? onProgress = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -63,13 +64,289 @@ public class MangaCliService
 
         PassDisplayEnv(psi);
 
-        using var process = Process.Start(psi) 
-            ?? throw new InvalidOperationException("Failed to start manga-cli process");
+        using var process = new Process { StartInfo = psi };
+        var sb = new StringBuilder();
 
-        var output = await process.StandardOutput.ReadToEndAsync();
+        process.OutputDataReceived += (s, e) =>
+        {
+            if (e.Data != null)
+            {
+                sb.AppendLine(e.Data);
+                if (e.Data.Contains("[PROGRESS]"))
+                {
+                    var prog = e.Data.Substring(e.Data.IndexOf("[PROGRESS]") + 10).Trim();
+                    onProgress?.Invoke(prog);
+                }
+            }
+        };
+
+        process.ErrorDataReceived += (s, e) =>
+        {
+            if (e.Data != null)
+            {
+                sb.AppendLine(e.Data);
+                if (e.Data.Contains("[PROGRESS]"))
+                {
+                    var prog = e.Data.Substring(e.Data.IndexOf("[PROGRESS]") + 10).Trim();
+                    onProgress?.Invoke(prog);
+                }
+            }
+        };
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
         await process.WaitForExitAsync();
+        return sb.ToString().Trim();
+    }
 
-        return output.Trim();
+    private async Task<string> RunCommandAsync(string arguments)
+    {
+        return await RunCommandWithProgressAsync(arguments);
+    }
+
+    
+            public static string CleanMediaTitle(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        var t = Regex.Replace(raw, @"\s*\[[A-Za-z0-9_\-]+\]", "").Trim();
+        t = Regex.Replace(t, @"\s*\((?:[A-Za-z0-9_\-,\s]+)\)$", "").Trim();
+        return string.IsNullOrWhiteSpace(t) ? raw.Trim() : t;
+    }
+
+    public static string SanitizeFilename(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var clean = new string(name.Where(ch => !invalid.Contains(ch) && ch != '/' && ch != '\\' && ch != ':' && ch != '*' && ch != '?' && ch != '"' && ch != '<' && ch != '>' && ch != '|').ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(clean) ? "unnamed" : clean;
+    }
+
+    public static string GetBaseDownloadDirectory()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var standard = Path.Combine(home, ".config", "manga-gui", "Downloaded");
+        var alt = Path.Combine(home, ".config", "manga-gui", "Dowloaded");
+        if (Directory.Exists(alt) && !Directory.Exists(standard)) return alt;
+        Directory.CreateDirectory(standard);
+        return standard;
+    }
+
+    public static string GetAnimeDownloadDirectory()
+    {
+        var dir = Path.Combine(GetBaseDownloadDirectory(), "Anime");
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    public static string GetMangaDownloadDirectory()
+    {
+        var dir = Path.Combine(GetBaseDownloadDirectory(), "Manga");
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    public async Task<(bool success, string message, string? destination)> DownloadMediaAsync(MediaItem item, int number, Action<string>? onProgress = null)
+    {
+        try
+        {
+            var isManga = item.Type.ToLower() == "manga";
+            var baseDir = isManga ? GetMangaDownloadDirectory() : GetAnimeDownloadDirectory();
+            var cleanTitle = CleanMediaTitle(item.Title);
+            var safeTitle = SanitizeFilename(cleanTitle);
+            if (string.IsNullOrWhiteSpace(safeTitle)) safeTitle = "unnamed";
+            var targetDir = Path.Combine(baseDir, safeTitle);
+            Directory.CreateDirectory(targetDir);
+
+            var langArg = !string.IsNullOrWhiteSpace(item.Language) && item.Language.ToLower() != "it" 
+                ? $"-l {item.Language}" 
+                : "-l all";
+            var typeArg = isManga ? $"-m {langArg} -C {number} -d \"{targetDir}\"" : $"-a -e {number} -d \"{targetDir}\"";
+            var output = await RunCommandWithProgressAsync($"\"{cleanTitle}\" {typeArg}", onProgress);
+            
+            var match = Regex.Match(output, @"Destination:\s*([^\r\n]+)", RegexOptions.IgnoreCase);
+            var dest = match.Success ? match.Groups[1].Value.Trim() : null;
+
+            if (output.Contains("Download complete") || output.Contains("Downloaded all") || 
+                (dest != null && (File.Exists(dest) || Directory.Exists(dest))))
+            {
+                var unit = isManga ? "Chapter" : "Episode";
+                return (true, $"✔ Download complete: {item.Title} ({unit} {number})", dest);
+            }
+
+            if (output.Contains("already exists") || output.Contains("100%"))
+            {
+                var unit = isManga ? "Chapter" : "Episode";
+                return (true, $"✔ Already downloaded: {item.Title} ({unit} {number})", dest);
+            }
+
+            return (false, $"Download completed with message: {output.Trim()}", dest);
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Download error: {ex.Message}", null);
+        }
+    }
+
+    public async Task<List<MediaItem>> GetDownloadedItemsAsync()
+    {
+        var items = new List<MediaItem>();
+        try
+        {
+            var animeDir = GetAnimeDownloadDirectory();
+            if (Directory.Exists(animeDir))
+            {
+                foreach (var dir in Directory.GetDirectories(animeDir))
+                {
+                    try
+                    {
+                        var dirInfo = new DirectoryInfo(dir);
+                        var videoFiles = dirInfo.GetFiles("*.*", SearchOption.AllDirectories)
+                            .Where(f => f.Extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase) ||
+                                        f.Extension.Equals(".mkv", StringComparison.OrdinalIgnoreCase) ||
+                                        f.Extension.Equals(".webm", StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+
+                        if (videoFiles.Count > 0)
+                        {
+                            long totalBytes = videoFiles.Sum(f => f.Length);
+                            var title = dirInfo.Name;
+                            var numbers = new List<int>();
+
+                            foreach (var vf in videoFiles)
+                            {
+                                var m = Regex.Match(vf.Name, @"(?:ep(?:isode)?|cap(?:itolo)?|\b)(\d+)", RegexOptions.IgnoreCase);
+                                if (m.Success && int.TryParse(m.Groups[1].Value, out var n))
+                                {
+                                    numbers.Add(n);
+                                }
+                            }
+                            if (numbers.Count == 0) numbers.Add(1);
+
+                            var item = new MediaItem
+                            {
+                                Id = $"download:anime:{title}",
+                                Title = title,
+                                Type = "anime",
+                                Source = "downloaded",
+                                SourceName = "Offline Storage",
+                                IsDownloaded = true,
+                                LocalPath = dir,
+                                Count = videoFiles.Count,
+                                WatchedNumbers = numbers.Distinct().OrderBy(x => x).ToList(),
+                                DownloadSizeText = FormatFileSize(totalBytes),
+                                CustomSubDubText = $"{videoFiles.Count} {(videoFiles.Count == 1 ? "episode" : "episodes")} ({FormatFileSize(totalBytes)})"
+                            };
+
+                            var localCover = Path.Combine(dir, "cover.jpg");
+                            if (File.Exists(localCover))
+                            {
+                                item.Image = localCover;
+                            }
+
+                            items.Add(item);
+                        }
+                    }
+                    catch {}
+                }
+            }
+
+            var mangaDir = GetMangaDownloadDirectory();
+            if (Directory.Exists(mangaDir))
+            {
+                foreach (var dir in Directory.GetDirectories(mangaDir))
+                {
+                    try
+                    {
+                        var dirInfo = new DirectoryInfo(dir);
+                        var subDirs = dirInfo.GetDirectories();
+                        var imgFiles = dirInfo.GetFiles("*.*", SearchOption.AllDirectories)
+                            .Where(f => f.Extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                                        f.Extension.Equals(".png", StringComparison.OrdinalIgnoreCase) ||
+                                        f.Extension.Equals(".webp", StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+
+                        if (subDirs.Length > 0 || imgFiles.Count > 0)
+                        {
+                            long totalBytes = imgFiles.Sum(f => f.Length);
+                            var title = dirInfo.Name;
+                            var count = subDirs.Length > 0 ? subDirs.Length : 1;
+                            var numbers = new List<int>();
+
+                            foreach (var sd in subDirs)
+                            {
+                                var m = Regex.Match(sd.Name, @"(?:cap(?:itolo)?|ch(?:apter)?|\b)(\d+)", RegexOptions.IgnoreCase);
+                                if (m.Success && int.TryParse(m.Groups[1].Value, out var n))
+                                {
+                                    numbers.Add(n);
+                                }
+                            }
+                            if (numbers.Count == 0) numbers.Add(1);
+
+                            var item = new MediaItem
+                            {
+                                Id = $"download:manga:{title}",
+                                Title = title,
+                                Type = "manga",
+                                Source = "downloaded",
+                                SourceName = "Offline Storage",
+                                IsDownloaded = true,
+                                LocalPath = dir,
+                                Count = count,
+                                WatchedNumbers = numbers.Distinct().OrderBy(x => x).ToList(),
+                                DownloadSizeText = FormatFileSize(totalBytes),
+                                CustomSubDubText = $"{count} {(count == 1 ? "chapter" : "chapters")} ({FormatFileSize(totalBytes)})"
+                            };
+
+                            var localCover = Path.Combine(dir, "cover.jpg");
+                            if (File.Exists(localCover))
+                            {
+                                item.Image = localCover;
+                            }
+
+                            items.Add(item);
+                        }
+                    }
+                    catch {}
+                }
+            }
+
+            EnrichCoversAsync(items, "anime");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error scanning downloads: {ex.Message}");
+        }
+        return items;
+    }
+
+    public async Task<bool> DeleteDownloadedItemAsync(MediaItem item)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(item.LocalPath) && Directory.Exists(item.LocalPath))
+            {
+                Directory.Delete(item.LocalPath, true);
+                return true;
+            }
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting download: {ex.Message}");
+            return false;
+        }
+    }
+
+    public static string FormatFileSize(long bytes)
+    {
+        if (bytes <= 0) return "0 MB";
+        double mb = bytes / (1024.0 * 1024.0);
+        if (mb >= 1000)
+        {
+            return $"{(mb / 1024.0):F1} GB";
+        }
+        return $"{mb:F1} MB";
     }
 
     public async Task<List<MediaItem>> GetAnimeCatalogAsync(string? source = null)
@@ -253,9 +530,9 @@ public class MangaCliService
                     FileName = "mpv",
                     Arguments = $"\"{streamUrl.Trim()}\" --title=\"{item.Title} - Episode {episode}\" --force-window=immediate",
                     UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
+                    RedirectStandardOutput = false,
+                    RedirectStandardError = false,
+                    CreateNoWindow = false
                 };
                 PassDisplayEnv(mpvPsi);
                 Process.Start(mpvPsi);
@@ -274,7 +551,41 @@ public class MangaCliService
     {
         try
         {
-            var output = await RunCommandAsync($"\"{item.Title}\" -m -l it -C {chapter} --get-url");
+            // 1. Check if chapter is already downloaded locally in ~/.config/manga-gui/Downloaded/Manga/<Title>/
+            var mangaDir = GetMangaDownloadDirectory();
+            var safeTitle = new string(item.Title.Where(ch => char.IsLetterOrDigit(ch) || ch == ' ' || ch == '-' || ch == '_').ToArray()).Trim();
+            var titleDir = Path.Combine(mangaDir, safeTitle);
+            if (Directory.Exists(titleDir))
+            {
+                var subDirs = Directory.GetDirectories(titleDir);
+                var localChapterDir = subDirs.FirstOrDefault(d => 
+                    Regex.IsMatch(Path.GetFileName(d), $@"(?:cap(?:itolo)?|ch(?:apter)?|)0*{chapter}", RegexOptions.IgnoreCase));
+
+                if (localChapterDir != null && Directory.Exists(localChapterDir))
+                {
+                    var localPsi = new ProcessStartInfo
+                    {
+                        FileName = "mpv",
+                        Arguments = $"--title=\"{item.Title} - Chapter {chapter} (Offline)\" --image-display-duration=inf \"{localChapterDir}\"",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = false,
+                        RedirectStandardError = false,
+                        CreateNoWindow = false
+                    };
+                    PassDisplayEnv(localPsi);
+                    Process.Start(localPsi);
+                    return (true, $"Reader opened offline: {item.Title} (Chapter {chapter})");
+                }
+            }
+
+            // 2. Fetch URLs from provider
+            var cleanTitle = CleanMediaTitle(item.Title);
+            var srcArg = !string.IsNullOrWhiteSpace(item.Source) && item.Source != "all" && item.Source != "Tutte le fonti" && item.Source != "All sources" && item.Source != "downloaded"
+                ? $"-s \"{item.Source}\"" : "";
+            var langArg = !string.IsNullOrWhiteSpace(item.Language) && item.Language.ToLower() != "it" 
+                ? $"-l {item.Language}" 
+                : "-l all";
+            var output = await RunCommandAsync($"\"{cleanTitle}\" -m {srcArg} {langArg} -C {chapter} --get-url");
             var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             var pages = lines.Where(l => l.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
                                          l.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
@@ -283,15 +594,20 @@ public class MangaCliService
 
             if (pages.Count > 0)
             {
-                var pagesArgs = string.Join(" ", pages.Select(p => $"\"{p}\""));
+                // Write playlist to temp file for clean and fast MPV loading
+                var playlistDir = Path.Combine(Path.GetTempPath(), "manga-gui");
+                Directory.CreateDirectory(playlistDir);
+                var playlistFile = Path.Combine(playlistDir, $"playlist_{safeTitle}_{chapter}.m3u");
+                await File.WriteAllLinesAsync(playlistFile, pages);
+
                 var mpvPsi = new ProcessStartInfo
                 {
                     FileName = "mpv",
-                    Arguments = $"--title=\"{item.Title} - Chapter {chapter}\" --image-display-duration=inf --force-window=immediate {pagesArgs}",
+                    Arguments = $"--title=\"{item.Title} - Chapter {chapter}\" --image-display-duration=inf --referrer=\"https://onepiecepower.com/\" --playlist=\"{playlistFile}\"",
                     UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
+                    RedirectStandardOutput = false,
+                    RedirectStandardError = false,
+                    CreateNoWindow = false
                 };
                 PassDisplayEnv(mpvPsi);
                 Process.Start(mpvPsi);
@@ -460,20 +776,37 @@ public class MangaCliService
                 continue;
             }
 
-            var itemMatch = Regex.Match(line, @"^\s*\d+\.\s+(.*?)(?:\s+\[(.*?)\])?$");
+            var itemMatch = Regex.Match(line, @"^\s*\d+\.\s+(.*?)\s+\[([A-Za-z0-9_\-]+)\](?:\s+\((.*?)\))?$");
             if (itemMatch.Success)
             {
                 var title = itemMatch.Groups[1].Value.Trim();
-                var tag = itemMatch.Groups[2].Success ? itemMatch.Groups[2].Value.Trim() : "";
+                var tag = itemMatch.Groups[2].Value.Trim();
+                var genres = itemMatch.Groups[3].Success ? itemMatch.Groups[3].Value.Trim() : "";
 
                 list.Add(new MediaItem
                 {
                     Title = title,
                     Type = type,
                     Audio = tag,
+                    Language = tag.ToLower(),
+                    Genres = genres,
                     Source = currentSource.ToLower().Replace(" ", ""),
                     SourceName = currentSource
                 });
+            }
+            else
+            {
+                var simpleMatch = Regex.Match(line, @"^\s*\d+\.\s+(.*?)(?:\s+\((.*?)\))?$");
+                if (simpleMatch.Success)
+                {
+                    list.Add(new MediaItem
+                    {
+                        Title = simpleMatch.Groups[1].Value.Trim(),
+                        Type = type,
+                        Source = currentSource.ToLower().Replace(" ", ""),
+                        SourceName = currentSource
+                    });
+                }
             }
         }
 

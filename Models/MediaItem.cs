@@ -44,6 +44,18 @@ public partial class MediaItem : ObservableObject
     public string? Author { get; set; }
 
     [ObservableProperty]
+    private bool _isDownloaded;
+
+    [ObservableProperty]
+    private string? _localPath;
+
+    [ObservableProperty]
+    private string? _downloadSizeText;
+
+    [ObservableProperty]
+    private string? _customSubDubText;
+
+    [ObservableProperty]
     [property: JsonPropertyName("count")]
     private int _count;
 
@@ -103,6 +115,18 @@ public partial class MediaItem : ObservableObject
     {
         get
         {
+                        if (!string.IsNullOrWhiteSpace(CustomSubDubText))
+            {
+                return CustomSubDubText;
+            }
+
+            if (IsDownloaded)
+            {
+                var unit = Type.ToLower() == "manga" ? "chapters" : "episodes";
+                var size = !string.IsNullOrWhiteSpace(DownloadSizeText) ? $" ({DownloadSizeText})" : "";
+                return $"{Count} {unit} downloaded{size}";
+            }
+
             if (!string.IsNullOrWhiteSpace(WatchedSummary))
             {
                 var label = Type.ToLower() == "manga" ? "Read" : "Watched";
@@ -130,7 +154,7 @@ public partial class MediaItem : ObservableObject
 
     public bool HasImage => !string.IsNullOrWhiteSpace(Image);
 
-    public string AudioBadge => Audio?.ToLower() switch
+    public string AudioBadge => IsDownloaded ? "OFFLINE" : Audio?.ToLower() switch
     {
         "ita" => "ITA",
         "subita" => "SUB ITA",
