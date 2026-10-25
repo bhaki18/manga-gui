@@ -1564,7 +1564,9 @@ async function handleMangaFlow(query, options) {
   if (options.chapter) {
     const targetCh = String(options.chapter).trim();
     const cleanTargetCh = targetCh.replace(/^0+/, '');
-    const foundCh = chapters.find(c => {
+    // Prefer readable chapter (not external link)
+    let foundCh = chapters.find(c => {
+      if (c.externalUrl) return false;
       const cNum = String(c.number || c.id || '').trim();
       const cleanNum = cNum.replace(/^0+/, '');
       if (cNum === targetCh || (cleanNum && cleanNum === cleanTargetCh)) return true;
@@ -1575,6 +1577,20 @@ async function handleMangaFlow(query, options) {
       if (m && m[1] === cleanTargetCh) return true;
       return false;
     });
+
+    if (!foundCh) {
+      foundCh = chapters.find(c => {
+        const cNum = String(c.number || c.id || '').trim();
+        const cleanNum = cNum.replace(/^0+/, '');
+        if (cNum === targetCh || (cleanNum && cleanNum === cleanTargetCh)) return true;
+        if (c.title.includes(` ${targetCh} `) || c.title.includes(` 0${targetCh} `) || c.title.includes(` 00${targetCh} `)) return true;
+        if (c.title.includes(`Capitolo ${targetCh}`) || c.title.includes(`Capitolo 0${targetCh}`) || c.title.includes(`Capitolo 00${targetCh}`)) return true;
+        if (c.title.includes(`Chapter ${targetCh}`) || c.title.includes(`Chapter 0${targetCh}`) || c.title.includes(`Chapter 00${targetCh}`)) return true;
+        const m = c.title.match(/(?:capitolo|chapter|ch\.?|\b)0*(\d+)/i);
+        if (m && m[1] === cleanTargetCh) return true;
+        return false;
+      });
+    }
 
     if (!foundCh) {
       console.log(chalk.red(`❌ Chapter "${targetCh}" not found.`));

@@ -107,7 +107,51 @@ public class MangaCliService
     }
 
     
-            public static string CleanMediaTitle(string raw)
+                public static string NormalizeProviderSource(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        var s = raw.ToLowerInvariant().Trim();
+        if (s.Contains("mangadex")) return "mangadex";
+        if (s.Contains("mangapill")) return "mangapill";
+        if (s.Contains("animeworld")) return "animeworld";
+        if (s.Contains("animesaturn")) return "animesaturn";
+        if (s.Contains("onepiecepower") || s.Contains("one piece power"))
+            return s.Contains("anime") ? "onepiecepower-anime" : "onepiecepower";
+        return s.Replace(" ", "");
+    }
+
+    private static List<string> ExtractPagesFromOutput(string output)
+    {
+        if (string.IsNullOrWhiteSpace(output)) return new List<string>();
+        return output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                     .Where(l => l.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
+                                 l.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                     .Select(l => l.Trim())
+                     .ToList();
+    }
+
+    private static string GetReferrerForPages(List<string> pages, string provider)
+    {
+        if (pages == null || pages.Count == 0) return "";
+        var p0 = pages[0].ToLowerInvariant();
+        if (p0.Contains("readdetectiveconan") || p0.Contains("mangapill") || provider.Contains("mangapill"))
+            return "https://mangapill.com/";
+        if (p0.Contains("mangadex") || provider.Contains("mangadex"))
+            return "https://mangadex.org/";
+        if (p0.Contains("onepiecepower") || provider.Contains("onepiecepower"))
+            return "https://onepiecepower.com/";
+        try
+        {
+            var uri = new Uri(pages[0]);
+            return $"{uri.Scheme}://{uri.Host}/";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    public static string CleanMediaTitle(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
         var t = Regex.Replace(raw, @"\s*\[[A-Za-z0-9_\-]+\]", "").Trim();
@@ -161,7 +205,9 @@ public class MangaCliService
             var langArg = !string.IsNullOrWhiteSpace(item.Language) && item.Language.ToLower() != "it" 
                 ? $"-l {item.Language}" 
                 : "-l all";
-            var typeArg = isManga ? $"-m {langArg} -C {number} -d \"{targetDir}\"" : $"-a -e {number} -d \"{targetDir}\"";
+            var src = NormalizeProviderSource(item.Source);
+            var srcArg = !string.IsNullOrWhiteSpace(src) && src != "all" && src != "downloaded" ? $"-s \"{src}\"" : "";
+            var typeArg = isManga ? $"-m {srcArg} {langArg} -C {number} -d \"{targetDir}\"" : $"-a {srcArg} -e {number} -d \"{targetDir}\"";
             var output = await RunCommandWithProgressAsync($"\"{cleanTitle}\" {typeArg}", onProgress);
             
             var match = Regex.Match(output, @"Destination:\s*([^\r\n]+)", RegexOptions.IgnoreCase);
@@ -559,7 +605,7 @@ public class MangaCliService
             {
                 var subDirs = Directory.GetDirectories(titleDir);
                 var localChapterDir = subDirs.FirstOrDefault(d => 
-                    Regex.IsMatch(Path.GetFileName(d), $@"(?:cap(?:itolo)?|ch(?:apter)?|)0*{chapter}", RegexOptions.IgnoreCase));
+                    Regex.IsMatch(Path.GetFileName(d), $@"(?:cap(?:itolo)?|ch(?:apter)?| )0*{chapter} ", RegexOptions.IgnoreCase));
 
                 if (localChapterDir != null && Directory.Exists(localChapterDir))
                 {
@@ -578,19 +624,38 @@ public class MangaCliService
                 }
             }
 
-            // 2. Fetch URLs from provider
+            // 2. Fetch URLs from provider with multi-tier provider fallback
             var cleanTitle = CleanMediaTitle(item.Title);
-            var srcArg = !string.IsNullOrWhiteSpace(item.Source) && item.Source != "all" && item.Source != "Tutte le fonti" && item.Source != "All sources" && item.Source != "downloaded"
-                ? $"-s \"{item.Source}\"" : "";
+            var src = NormalizeProviderSource(item.Source);
+            var srcArg = !string.IsNullOrWhiteSpace(src) && src != "all" && src != "downloaded"
+                ? $"-s \"{src}\"" : "";
             var langArg = !string.IsNullOrWhiteSpace(item.Language) && item.Language.ToLower() != "it" 
                 ? $"-l {item.Language}" 
                 : "-l all";
+
             var output = await RunCommandAsync($"\"{cleanTitle}\" -m {srcArg} {langArg} -C {chapter} --get-url");
-            var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            var pages = lines.Where(l => l.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
-                                         l.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                             .Select(l => l.Trim())
-                             .ToList();
+            var pages = ExtractPagesFromOutput(output);
+
+            // Fallback 1: Try onepiecepower (Italian scanlations) if primary failed
+            if (pages.Count == 0 && src != "onepiecepower")
+            {
+                output = await RunCommandAsync($"\"{cleanTitle}\" -m -s onepiecepower -C {chapter} --get-url");
+                pages = ExtractPagesFromOutput(output);
+            }
+
+            // Fallback 2: Try mangapill (free fast English scans)
+            if (pages.Count == 0 && src != "mangapill")
+            {
+                output = await RunCommandAsync($"\"{cleanTitle}\" -m -s mangapill -l en -C {chapter} --get-url");
+                pages = ExtractPagesFromOutput(output);
+            }
+
+            // Fallback 3: Try general search across all providers
+            if (pages.Count == 0)
+            {
+                output = await RunCommandAsync($"\"{cleanTitle}\" -m -l all -C {chapter} --get-url");
+                pages = ExtractPagesFromOutput(output);
+            }
 
             if (pages.Count > 0)
             {
@@ -600,10 +665,13 @@ public class MangaCliService
                 var playlistFile = Path.Combine(playlistDir, $"playlist_{safeTitle}_{chapter}.m3u");
                 await File.WriteAllLinesAsync(playlistFile, pages);
 
+                var referrer = GetReferrerForPages(pages, src);
+                var refArg = !string.IsNullOrWhiteSpace(referrer) ? $"--referrer=\"{referrer}\"" : "";
+
                 var mpvPsi = new ProcessStartInfo
                 {
                     FileName = "mpv",
-                    Arguments = $"--title=\"{item.Title} - Chapter {chapter}\" --image-display-duration=inf --referrer=\"https://onepiecepower.com/\" --playlist=\"{playlistFile}\"",
+                    Arguments = $"--title=\"{item.Title} - Chapter {chapter}\" --image-display-duration=inf {refArg} --playlist=\"{playlistFile}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = false,
                     RedirectStandardError = false,
