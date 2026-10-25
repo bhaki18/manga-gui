@@ -92,11 +92,15 @@ class OnePiecePowerProvider extends BaseProvider {
   async search(query, lang = null) {
     const catalog = await this.getCatalog();
     const cleanQuery = query.toLowerCase().trim();
+    const cleanNorm = cleanQuery.replace(/[^a-z0-9]/g, '');
 
     return catalog.filter(m => {
       if (lang && m.language !== lang) return false;
-      const matchTitle = m.title.toLowerCase().includes(cleanQuery);
-      const matchAlt = m.altTitle && m.altTitle.toLowerCase().includes(cleanQuery);
+      const titleLower = m.title.toLowerCase();
+      const matchTitle = titleLower.includes(cleanQuery) || 
+                         (cleanNorm.length >= 3 && titleLower.replace(/[^a-z0-9]/g, '').includes(cleanNorm));
+      const matchAlt = m.altTitle && (m.altTitle.toLowerCase().includes(cleanQuery) || 
+                                     (cleanNorm.length >= 3 && m.altTitle.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanNorm)));
       const matchAuthor = m.author && m.author.toLowerCase().includes(cleanQuery);
       return matchTitle || matchAlt || matchAuthor;
     });

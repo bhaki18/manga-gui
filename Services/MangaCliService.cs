@@ -76,7 +76,7 @@ public class MangaCliService
     {
         try
         {
-            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" 
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
                 ? $"-s \"{source}\"" : "";
             var output = await RunCommandAsync($"--catalog-anime {srcArg} --list");
             var items = ParseCatalogOutput(output, "anime");
@@ -96,7 +96,7 @@ public class MangaCliService
     {
         try
         {
-            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" 
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
                 ? $"-s \"{source}\"" : "";
             var output = await RunCommandAsync($"--catalog-manga {srcArg} --list");
             var items = ParseCatalogOutput(output, "manga");
@@ -112,14 +112,69 @@ public class MangaCliService
         }
     }
 
+    
+    private static string? GetSegmentedQuery(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return null;
+        var clean = query.Trim().ToLower();
+        if (clean.Contains(' ') || clean.Length < 4) return null;
+
+        var dict = new HashSet<string>
+        {
+            "fire", "force", "one", "piece", "death", "note", "black", "clover", "demon", "slayer",
+            "fairy", "tail", "solo", "leveling", "tokyo", "ghoul", "chain", "saw", "chainsaw", "man",
+            "attack", "on", "titan", "sword", "art", "online", "my", "hero", "academia", "jujutsu", "kaisen",
+            "dr", "stone", "full", "metal", "fullmetal", "alchemist", "hunter", "dandadan", "dan", "da",
+            "spy", "family", "punch", "dragon", "ball", "bleach", "naruto", "boruto", "berserk", "blue",
+            "exorcist", "ao", "no"
+        };
+
+        for (int i = 2; i <= clean.Length - 2; i++)
+        {
+            var left = clean.Substring(0, i);
+            var right = clean.Substring(i);
+            if (dict.Contains(left) && dict.Contains(right))
+            {
+                return $"{left} {right}";
+            }
+        }
+        for (int i = 2; i <= clean.Length - 4; i++)
+        {
+            var left = clean.Substring(0, i);
+            if (dict.Contains(left))
+            {
+                for (int j = i + 1; j <= clean.Length - 2; j++)
+                {
+                    var mid = clean.Substring(i, j - i);
+                    var right = clean.Substring(j);
+                    if (dict.Contains(mid) && dict.Contains(right))
+                    {
+                        return $"{left} {mid} {right}";
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     public async Task<List<MediaItem>> SearchAnimeAsync(string query, string? source = null)
     {
         try
         {
-            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" 
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
                 ? $"-s \"{source}\"" : "";
             var output = await RunCommandAsync($"\"{query}\" -a {srcArg} --list");
             var items = ParseSearchOutput(output, "anime");
+            if (items.Count == 0)
+            {
+                var segmented = GetSegmentedQuery(query);
+                if (!string.IsNullOrWhiteSpace(segmented))
+                {
+                    var fallbackOutput = await RunCommandAsync($"\"{segmented}\" -a {srcArg} --list");
+                    var fallbackItems = ParseSearchOutput(fallbackOutput, "anime");
+                    if (fallbackItems.Count > 0) items = fallbackItems;
+                }
+            }
 
             EnrichCoversAsync(items, "anime");
 
@@ -136,11 +191,21 @@ public class MangaCliService
     {
         try
         {
-            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" 
+            var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
                 ? $"-s \"{source}\"" : "";
             var langArg = !string.IsNullOrWhiteSpace(lang) ? $"-l {lang}" : "-l it";
             var output = await RunCommandAsync($"\"{query}\" -m {srcArg} {langArg} --list");
             var items = ParseSearchOutput(output, "manga");
+            if (items.Count == 0)
+            {
+                var segmented = GetSegmentedQuery(query);
+                if (!string.IsNullOrWhiteSpace(segmented))
+                {
+                    var fallbackOutput = await RunCommandAsync($"\"{segmented}\" -m {srcArg} {langArg} --list");
+                    var fallbackItems = ParseSearchOutput(fallbackOutput, "manga");
+                    if (fallbackItems.Count > 0) items = fallbackItems;
+                }
+            }
 
             EnrichCoversAsync(items, "manga");
 
@@ -186,7 +251,7 @@ public class MangaCliService
                 var mpvPsi = new ProcessStartInfo
                 {
                     FileName = "mpv",
-                    Arguments = $"\"{streamUrl.Trim()}\" --title=\"{item.Title} - Episodio {episode}\" --force-window=immediate",
+                    Arguments = $"\"{streamUrl.Trim()}\" --title=\"{item.Title} - Episode {episode}\" --force-window=immediate",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -194,14 +259,14 @@ public class MangaCliService
                 };
                 PassDisplayEnv(mpvPsi);
                 Process.Start(mpvPsi);
-                return (true, $"In riproduzione: {item.Title} (Episodio {episode})");
+                return (true, $"Playing: {item.Title} (Episode {episode})");
             }
 
-            return (false, "Impossibile estrarre l'indirizzo del video per questo episodio.");
+            return (false, "Could not extract video stream URL for this episode.");
         }
         catch (Exception ex)
         {
-            return (false, $"Errore riproduzione: {ex.Message}");
+            return (false, $"Playback error: {ex.Message}");
         }
     }
 
@@ -222,7 +287,7 @@ public class MangaCliService
                 var mpvPsi = new ProcessStartInfo
                 {
                     FileName = "mpv",
-                    Arguments = $"--title=\"{item.Title} - Capitolo {chapter}\" --image-display-duration=inf --force-window=immediate {pagesArgs}",
+                    Arguments = $"--title=\"{item.Title} - Chapter {chapter}\" --image-display-duration=inf --force-window=immediate {pagesArgs}",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -230,14 +295,14 @@ public class MangaCliService
                 };
                 PassDisplayEnv(mpvPsi);
                 Process.Start(mpvPsi);
-                return (true, $"Aperto lettore: {item.Title} (Capitolo {chapter} - {pages.Count} pagine)");
+                return (true, $"Reader opened: {item.Title} (Chapter {chapter} - {pages.Count} pages)");
             }
 
-            return (false, "Nessuna pagina trovata per questo capitolo.");
+            return (false, "No pages found for this chapter.");
         }
         catch (Exception ex)
         {
-            return (false, $"Errore lettura: {ex.Message}");
+            return (false, $"Reading error: {ex.Message}");
         }
     }
 
@@ -314,6 +379,23 @@ public class MangaCliService
         }
         catch
         {
+            return false;
+        }
+    }
+
+    public async Task<bool> ClearAllHistoryAsync()
+    {
+        try
+        {
+            if (File.Exists(_historyFile))
+            {
+                await File.WriteAllTextAsync(_historyFile, "{}");
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error clearing history: {ex.Message}");
             return false;
         }
     }

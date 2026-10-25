@@ -92,7 +92,7 @@ public partial class MediaItem : ObservableObject
         }
         ranges.Add(start == prev ? $"{start}" : $"{start}-{prev}");
 
-        var prefix = Type.ToLower() == "manga" ? "Cap." : "Ep.";
+        var prefix = Type.ToLower() == "manga" ? "Ch." : "Ep.";
         WatchedSummary = $"{prefix} {string.Join(", ", ranges)}";
         LastItem = $"{prefix} {sorted.Last()}";
         OnPropertyChanged(nameof(SubDubText));
@@ -105,15 +105,15 @@ public partial class MediaItem : ObservableObject
         {
             if (!string.IsNullOrWhiteSpace(WatchedSummary))
             {
-                var label = Type.ToLower() == "manga" ? "Letti" : "Visti";
-                var unit = Type.ToLower() == "manga" ? "cap." : "ep.";
+                var label = Type.ToLower() == "manga" ? "Read" : "Watched";
+                var unit = Type.ToLower() == "manga" ? "ch." : "ep.";
                 return $"{label}: {WatchedSummary} ({Count} {unit})";
             }
 
             if (!string.IsNullOrWhiteSpace(LastItem))
             {
-                var label = Type.ToLower() == "manga" ? "Letto" : "Visto";
-                var unit = Type.ToLower() == "manga" ? "cap." : "ep.";
+                var label = Type.ToLower() == "manga" ? "Read" : "Watched";
+                var unit = Type.ToLower() == "manga" ? "ch." : "ep.";
                 return $"{label}: {LastItem} ({Count} {unit})";
             }
 

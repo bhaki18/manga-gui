@@ -23,7 +23,7 @@ public partial class MainViewModel : ViewModelBase
     private bool _isLoading;
 
     [ObservableProperty]
-    private string _statusText = "Pronto";
+    private string _statusText = "Ready";
 
     [ObservableProperty]
     private MediaItem? _selectedItem;
@@ -35,22 +35,34 @@ public partial class MainViewModel : ViewModelBase
     private decimal _maxNumber = 1;
 
     [ObservableProperty]
-    private string _selectedSource = "Tutte le fonti";
+    private string _selectedSource = "All sources";
 
-    public string ActionButtonText => SelectedItem?.Type.ToLower() == "manga" ? "📖 LEGGI ORA" : "▶ INIZIA A GUARDARE";
-    public string NumberLabel => SelectedItem?.Type.ToLower() == "manga" ? "Capitolo:" : "Episodio:";
+    [ObservableProperty]
+    private bool _isConfirmDialogVisible;
+
+    [ObservableProperty]
+    private string _confirmDialogTitle = "";
+
+    [ObservableProperty]
+    private string _confirmDialogMessage = "";
+
+    private Func<Task>? _pendingConfirmAsyncAction;
+
+    public string ActionButtonText => SelectedItem?.Type.ToLower() == "manga" ? "📖 READ NOW" : "▶ START WATCHING";
+    public string NumberLabel => SelectedItem?.Type.ToLower() == "manga" ? "Chapter:" : "Episode:";
 
     public bool IsCurrentNumberWatched => SelectedItem != null && SelectedItem.WatchedNumbers != null && SelectedItem.WatchedNumbers.Contains((int)SelectedNumber);
-    public string WatchedStatusBadge => IsCurrentNumberWatched ? (SelectedItem?.Type.ToLower() == "manga" ? "✔ LETTO" : "✔ VISTO") : "";
-    public string UnmarkButtonText => SelectedItem?.Type.ToLower() == "manga" ? "✕ Deseleziona dai letti" : "✕ Deseleziona dai visti";
+    public string WatchedStatusBadge => IsCurrentNumberWatched ? (SelectedItem?.Type.ToLower() == "manga" ? "✔ READ" : "✔ WATCHED") : "";
+    public string UnmarkButtonText => SelectedItem?.Type.ToLower() == "manga" ? "✕ Unmark as read" : "✕ Unmark as watched";
 
     public string AnimeTabColor => ActiveTab == "Anime" ? "#FF640A" : "#D0D0D0";
     public string MangaTabColor => ActiveTab == "Manga" ? "#FF640A" : "#D0D0D0";
-    public string HistoryTabColor => ActiveTab == "Cronologia" ? "#FF640A" : "#D0D0D0";
+    public string HistoryTabColor => (ActiveTab == "History" || ActiveTab == "Cronologia") ? "#FF640A" : "#D0D0D0";
+    public bool IsHistoryTabActive => ActiveTab == "History" || ActiveTab == "Cronologia";
 
     public string PageHeaderTitle => ActiveTab switch
     {
-        "Cronologia" => "Cronologia",
+        "History" or "Cronologia" => "History",
         "Anime" => "Most Popular Anime",
         "Manga" => "Most Popular Manga",
         _ => ActiveTab
@@ -58,7 +70,7 @@ public partial class MainViewModel : ViewModelBase
 
     public string PageSubHeader => ActiveTab switch
     {
-        "Cronologia" => "Opere Guardate e Lette di Recente",
+        "History" or "Cronologia" => "Recently Watched & Read",
         _ => "Popular"
     };
 
@@ -66,7 +78,7 @@ public partial class MainViewModel : ViewModelBase
 
     public ObservableCollection<string> Sources { get; } = new()
     {
-        "Tutte le fonti",
+        "All sources",
         "animeworld",
         "onepiecepower",
         "onepiecepower-anime",
@@ -82,7 +94,7 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnSelectedSourceChanged(string value)
     {
-        if (ActiveTab != "Cronologia")
+        if (ActiveTab != "History" && ActiveTab != "Cronologia")
         {
             _ = LoadCatalogAsync();
         }
@@ -95,6 +107,7 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(HistoryTabColor));
         OnPropertyChanged(nameof(PageHeaderTitle));
         OnPropertyChanged(nameof(PageSubHeader));
+        OnPropertyChanged(nameof(IsHistoryTabActive));
     }
 
     partial void OnSelectedItemChanged(MediaItem? value)
@@ -106,6 +119,24 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(UnmarkButtonText));
     }
 
+    [RelayCommand]
+    public void DecrementNumber()
+    {
+        if (SelectedNumber > 1)
+        {
+            SelectedNumber--;
+        }
+    }
+
+    [RelayCommand]
+    public void IncrementNumber()
+    {
+        if (SelectedNumber < MaxNumber)
+        {
+            SelectedNumber++;
+        }
+    }
+
     partial void OnSelectedNumberChanged(decimal value)
     {
         OnPropertyChanged(nameof(IsCurrentNumberWatched));
@@ -115,11 +146,11 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     public async Task ShowHistoryAsync()
     {
-        ActiveTab = "Cronologia";
+        ActiveTab = "History";
         SelectedItem = null;
         SearchQuery = string.Empty;
         IsLoading = true;
-        StatusText = "Caricamento anime e manga guardati...";
+        StatusText = "Loading watch and read history...";
         Items.Clear();
 
         try
@@ -129,11 +160,11 @@ public partial class MainViewModel : ViewModelBase
             {
                 Items.Add(item);
             }
-            StatusText = $"Cronologia: {Items.Count} titoli guardati / letti";
+            StatusText = $"History: {Items.Count} titles watched / read";
         }
         catch (Exception ex)
         {
-            StatusText = $"Errore cronologia: {ex.Message}";
+            StatusText = $"History error: {ex.Message}";
         }
         finally
         {
@@ -161,28 +192,28 @@ public partial class MainViewModel : ViewModelBase
         }
 
         IsLoading = true;
-        StatusText = $"Ricerca in corso per \"{SearchQuery}\"...";
+        StatusText = $"Searching for \"{SearchQuery}\"...";
         Items.Clear();
 
         try
         {
-            var src = SelectedSource == "Tutte le fonti" || SelectedSource == "all" ? null : SelectedSource;
+            var src = SelectedSource == "All sources" || SelectedSource == "Tutte le fonti" || SelectedSource == "all" ? null : SelectedSource;
             if (ActiveTab == "Anime")
             {
                 var results = await _cliService.SearchAnimeAsync(SearchQuery, src);
                 foreach (var item in results) Items.Add(item);
-                StatusText = $"Trovati {Items.Count} anime per \"{SearchQuery}\"";
+                StatusText = $"Found {Items.Count} anime for \"{SearchQuery}\"";
             }
             else
             {
                 var results = await _cliService.SearchMangaAsync(SearchQuery, src);
                 foreach (var item in results) Items.Add(item);
-                StatusText = $"Trovati {Items.Count} manga per \"{SearchQuery}\"";
+                StatusText = $"Found {Items.Count} manga for \"{SearchQuery}\"";
             }
         }
         catch (Exception ex)
         {
-            StatusText = $"Errore ricerca: {ex.Message}";
+            StatusText = $"Search error: {ex.Message}";
         }
         finally
         {
@@ -194,28 +225,28 @@ public partial class MainViewModel : ViewModelBase
     public async Task LoadCatalogAsync()
     {
         IsLoading = true;
-        StatusText = $"Caricamento catalogo {ActiveTab}...";
+        StatusText = $"Loading {ActiveTab} catalog...";
         Items.Clear();
 
         try
         {
-            var src = SelectedSource == "Tutte le fonti" || SelectedSource == "all" ? null : SelectedSource;
+            var src = SelectedSource == "All sources" || SelectedSource == "Tutte le fonti" || SelectedSource == "all" ? null : SelectedSource;
             if (ActiveTab == "Anime")
             {
                 var catalog = await _cliService.GetAnimeCatalogAsync(src);
                 foreach (var item in catalog) Items.Add(item);
-                StatusText = $"Catalogo Anime: {Items.Count} titoli pronti";
+                StatusText = $"Anime Catalog: {Items.Count} titles ready";
             }
             else
             {
                 var catalog = await _cliService.GetMangaCatalogAsync(src);
                 foreach (var item in catalog) Items.Add(item);
-                StatusText = $"Catalogo Manga: {Items.Count} titoli pronti";
+                StatusText = $"Manga Catalog: {Items.Count} titles ready";
             }
         }
         catch (Exception ex)
         {
-            StatusText = $"Errore catalogo: {ex.Message}";
+            StatusText = $"Catalog error: {ex.Message}";
         }
         finally
         {
@@ -262,9 +293,9 @@ public partial class MainViewModel : ViewModelBase
         if (SelectedItem == null) return;
         var num = (int)SelectedNumber;
         var title = SelectedItem.Title;
-        var unit = SelectedItem.Type.ToLower() == "manga" ? "Capitolo" : "Episodio";
+        var unit = SelectedItem.Type.ToLower() == "manga" ? "Chapter" : "Episode";
 
-        StatusText = $"Rimozione {unit} {num} dalla cronologia di {title}...";
+        StatusText = $"Removing {unit} {num} from {title} history...";
         var success = await _cliService.UnmarkItemAsync(SelectedItem, num);
         if (success)
         {
@@ -277,9 +308,9 @@ public partial class MainViewModel : ViewModelBase
 
             OnPropertyChanged(nameof(IsCurrentNumberWatched));
             OnPropertyChanged(nameof(WatchedStatusBadge));
-            StatusText = $"✔ {unit} {num} rimosso dalla cronologia di \"{title}\".";
+            StatusText = $"✔ {unit} {num} removed from \"{title}\" history.";
 
-            if (ActiveTab == "Cronologia" && SelectedItem.Count == 0)
+            if ((ActiveTab == "History" || ActiveTab == "Cronologia") && SelectedItem.Count == 0)
             {
                 Items.Remove(SelectedItem);
                 SelectedItem = null;
@@ -287,8 +318,57 @@ public partial class MainViewModel : ViewModelBase
         }
         else
         {
-            StatusText = $"Impossibile rimuovere {unit} {num} dalla cronologia.";
+            StatusText = $"Failed to remove {unit} {num} from history.";
         }
+    }
+
+    [RelayCommand]
+    public void RequestClearAllHistory()
+    {
+        ConfirmDialogTitle = "Clear All History?";
+        ConfirmDialogMessage = "Are you sure you want to permanently delete the ENTIRE history of watched anime and read manga? This action cannot be undone.";
+        _pendingConfirmAsyncAction = async () =>
+        {
+            StatusText = "Clearing entire history...";
+            await _cliService.ClearAllHistoryAsync();
+            Items.Clear();
+            SelectedItem = null;
+            StatusText = "✔ All history has been successfully cleared.";
+        };
+        IsConfirmDialogVisible = true;
+    }
+
+    [RelayCommand]
+    public void RequestRemoveItem()
+    {
+        if (SelectedItem == null) return;
+        var title = SelectedItem.Title;
+        ConfirmDialogTitle = "Remove from History?";
+        ConfirmDialogMessage = $"Are you sure you want to remove \"{title}\" from history?";
+        _pendingConfirmAsyncAction = async () =>
+        {
+            await RemoveItemFromHistoryAsync();
+        };
+        IsConfirmDialogVisible = true;
+    }
+
+    [RelayCommand]
+    public async Task ConfirmDialogActionAsync()
+    {
+        IsConfirmDialogVisible = false;
+        if (_pendingConfirmAsyncAction != null)
+        {
+            var action = _pendingConfirmAsyncAction;
+            _pendingConfirmAsyncAction = null;
+            await action();
+        }
+    }
+
+    [RelayCommand]
+    public void CancelDialogAction()
+    {
+        IsConfirmDialogVisible = false;
+        _pendingConfirmAsyncAction = null;
     }
 
     [RelayCommand]
@@ -296,20 +376,20 @@ public partial class MainViewModel : ViewModelBase
     {
         if (SelectedItem == null) return;
         var title = SelectedItem.Title;
-        StatusText = $"Rimozione \"{title}\" dalla cronologia...";
+        StatusText = $"Removing \"{title}\" from history...";
         var success = await _cliService.RemoveFromHistoryAsync(SelectedItem);
         if (success)
         {
-            if (ActiveTab == "Cronologia")
+            if (ActiveTab == "History" || ActiveTab == "Cronologia")
             {
                 Items.Remove(SelectedItem);
             }
             SelectedItem = null;
-            StatusText = $"✔ \"{title}\" rimosso completamente dalla cronologia.";
+            StatusText = $"✔ \"{title}\" completely removed from history.";
         }
         else
         {
-            StatusText = $"Impossibile rimuovere \"{title}\" dalla cronologia.";
+            StatusText = $"Failed to remove \"{title}\" from history.";
         }
     }
 
@@ -321,13 +401,13 @@ public partial class MainViewModel : ViewModelBase
         var num = (int)SelectedNumber;
         if (SelectedItem.Type.ToLower() == "anime")
         {
-            StatusText = $"Caricamento flusso per {SelectedItem.Title} (Episodio {num})...";
+            StatusText = $"Loading stream for {SelectedItem.Title} (Episode {num})...";
             var (success, msg) = await _cliService.PlayStreamAsync(SelectedItem, num);
             StatusText = msg;
         }
         else
         {
-            StatusText = $"Caricamento pagine per {SelectedItem.Title} (Capitolo {num})...";
+            StatusText = $"Loading pages for {SelectedItem.Title} (Chapter {num})...";
             var (success, msg) = await _cliService.ReadMangaAsync(SelectedItem, num);
             StatusText = msg;
         }

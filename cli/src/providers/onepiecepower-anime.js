@@ -123,11 +123,15 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
   async search(query, lang = null) {
     const catalog = await this.getCatalog();
     const clean = (query || '').toLowerCase().trim();
+    const cleanNorm = clean.replace(/[^a-z0-9]/g, '');
 
     return catalog.filter(a => {
       if (lang && lang !== 'all' && a.language !== lang) return false;
       if (!clean) return true;
-      return a.title.toLowerCase().includes(clean);
+      const titleLower = a.title.toLowerCase();
+      if (titleLower.includes(clean)) return true;
+      if (cleanNorm.length >= 3 && titleLower.replace(/[^a-z0-9]/g, '').includes(cleanNorm)) return true;
+      return false;
     });
   }
 

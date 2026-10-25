@@ -169,6 +169,67 @@ class ProviderManager {
     return this.animeProviders.get('onepiecepower-anime');
   }
 
+    getSearchDictionary() {
+    if (this._searchDict) return this._searchDict;
+    const dict = new Set([
+      'fire', 'force', 'one', 'piece', 'death', 'note', 'black', 'clover', 'demon', 'slayer',
+      'fairy', 'tail', 'solo', 'leveling', 'tokyo', 'ghoul', 'chain', 'saw', 'chainsaw', 'man',
+      'attack', 'on', 'titan', 'sword', 'art', 'online', 'my', 'hero', 'academia', 'jujutsu', 'kaisen',
+      'dr', 'stone', 'full', 'metal', 'fullmetal', 'alchemist', 'hunter', 'dandadan', 'dan', 'da',
+      'spy', 'family', 'punch', 'dragon', 'ball', 'bleach', 'naruto', 'boruto', 'berserk', 'blue',
+      'exorcist', 'ao', 'no', 'shingeki', 'kyojin', 'boku', 'hero', 'vinland', 'saga', 'mob', 'psycho',
+      'overlord', 're', 'zero', 'fate', 'stay', 'night', 'haikyuu', 'gintama', 'evangelion', 'cowboy',
+      'bebop', 'code', 'geass', 'steins', 'gate', 'monster', 'parasyte', 'hellsing', 'soul', 'eater',
+      'world', 'trigger', 'ranking', 'kings', 'wind', 'breaker', 'mashle', 'kaiju', 'frieren',
+      'apothecary', 'diaries', 'undead', 'unluck', 'shangri', 'la', 'frontier', 'classroom',
+      'elite', 'mushoku', 'tensei', 'shield', 'slime', 'shadow', 'eminence', 'god', 'tower',
+      'high', 'school', 'dxd', 'food', 'wars', 'shokugeki', 'soma', 'seven', 'deadly', 'sins',
+      'nanatsu', 'taizai', 'noragami', 'bungo', 'stray', 'dogs', 'assassination', 'classroom',
+      'blade', 'moon', 'sun', 'star', 'war', 'wars', 'game', 'online', 'life', 'magic', 'magical',
+      'girl', 'boy', 'lord', 'king', 'queen', 'prince', 'princess', 'knight', 'legend', 'chronicles',
+      'adventure', 'quest', 'dungeon', 'labyrinth', 'goblin', 'zombie', 'vampire', 'witch', 'wizard',
+      'dark', 'light', 'white', 'red', 'gold', 'silver', 'iron', 'steel', 'blood', 'heart', 'spirit',
+      'ghost', 'beast', 'monster', 'devil', 'angel', 'god', 'goddess', 'heaven', 'hell', 'abyss',
+      'space', 'time', 'dream', 'night', 'day', 'dawn', 'dusk', 'shadow', 'phantom', 'zero', 'infinity'
+    ]);
+    this._searchDict = dict;
+    return dict;
+  }
+
+  segmentQuery(word) {
+    if (!word || typeof word !== 'string') return null;
+    const clean = word.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const n = clean.length;
+    if (n < 4) return null;
+
+    const dict = this.getSearchDictionary();
+
+    // 1. Try 2-word split (e.g. fire + force, one + piece, solo + leveling)
+    for (let i = 2; i <= n - 2; i++) {
+      const left = clean.slice(0, i);
+      const right = clean.slice(i);
+      if (dict.has(left) && dict.has(right)) {
+        return `${left} ${right}`;
+      }
+    }
+
+    // 2. Try 3-word split (e.g. attack + on + titan, sword + art + online)
+    for (let i = 2; i <= n - 4; i++) {
+      const left = clean.slice(0, i);
+      if (dict.has(left)) {
+        for (let j = i + 1; j <= n - 2; j++) {
+          const mid = clean.slice(i, j);
+          const right = clean.slice(j);
+          if (dict.has(mid) && dict.has(right)) {
+            return `${left} ${mid} ${right}`;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
   async searchManga(query, lang = null, sourceFilter = null) {
     let providers = this.getMangaProviders();
 
@@ -190,9 +251,16 @@ class ProviderManager {
       return [];
     }
 
+    const segmented = this.segmentQuery(query);
     const searchPromises = providers.map(async (provider) => {
       try {
-        const items = await provider.search(query, lang);
+        let items = await provider.search(query, lang);
+        if ((!Array.isArray(items) || items.length === 0) && segmented && segmented.toLowerCase() !== query.toLowerCase()) {
+          const fallbackItems = await provider.search(segmented, lang);
+          if (Array.isArray(fallbackItems) && fallbackItems.length > 0) {
+            items = fallbackItems;
+          }
+        }
         if (!Array.isArray(items)) return [];
         return items.map(item => ({
           ...item,
@@ -236,9 +304,16 @@ class ProviderManager {
       return [];
     }
 
+    const segmented = this.segmentQuery(query);
     const searchPromises = providers.map(async (provider) => {
       try {
-        const items = await provider.search(query, lang);
+        let items = await provider.search(query, lang);
+        if ((!Array.isArray(items) || items.length === 0) && segmented && segmented.toLowerCase() !== query.toLowerCase()) {
+          const fallbackItems = await provider.search(segmented, lang);
+          if (Array.isArray(fallbackItems) && fallbackItems.length > 0) {
+            items = fallbackItems;
+          }
+        }
         if (!Array.isArray(items)) return [];
         return items.map(item => ({
           ...item,
