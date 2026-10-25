@@ -115,13 +115,29 @@
 
 
 
-                    <!-- Bookmark Icon -->
-                    <TextBlock Text="🔖" FontSize="16" Foreground="#A0A0A0" VerticalAlignment="Center" Cursor="Hand"/>
-
-                    <!-- User Avatar -->
-                    <Border CornerRadius="16" Background="#FF640A" Width="30" Height="30" Cursor="Hand">
-                        <TextBlock Text="👤" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#000000"/>
-                    </Border>
+                    <!-- Watched Manga / Anime History Button -->
+                    <Button Command="{Binding ShowHistoryCommand}"
+                            Background="#18191E"
+                            BorderBrush="#2C2D35"
+                            BorderThickness="1"
+                            CornerRadius="20"
+                            Padding="12,6"
+                            Cursor="Hand"
+                            ToolTip.Tip="Manga e Anime Guardati (Cronologia)">
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                            <Path Data="M 12 2 C 6.48 2 2 6.48 2 12 C 2 17.52 6.48 22 12 22 C 17.52 22 22 17.52 22 12 C 22 6.48 17.52 2 12 2 Z M 12 4 C 16.42 4 20 7.58 20 12 C 20 16.42 16.42 20 12 20 C 7.58 20 4 16.42 4 12 C 4 7.58 7.58 4 12 4 Z M 12.5 7 L 11 7 L 11 13 L 16.2 16.2 L 17 14.9 L 12.5 12.2 Z"
+                                  Fill="#FF640A"
+                                  Width="16"
+                                  Height="16"
+                                  Stretch="Uniform"
+                                  VerticalAlignment="Center"/>
+                            <TextBlock Text="Guardati"
+                                       FontSize="12"
+                                       FontWeight="Bold"
+                                       Foreground="#FFFFFF"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -197,14 +213,15 @@
                                                     </StackPanel>
                                                 </Grid>
 
-                                                <!-- Top-Right Crunchyroll Orange Bookmark Ribbon -->
-                                                <Border HorizontalAlignment="Right" 
-                                                        VerticalAlignment="Top" 
-                                                        Background="#FF640A" 
-                                                        CornerRadius="0,4,0,6"
-                                                        Padding="6,3">
-                                                    <TextBlock Text="🔖" FontSize="10" Foreground="#000000"/>
-                                                </Border>
+                                                <!-- Top-Right Crunchyroll Orange Bookmark Ribbon (Vector notched flag, no emoji) -->
+                                                <Path Data="M 0 0 L 14 0 L 14 20 L 7 15 L 0 20 Z" 
+                                                      Fill="#FF640A" 
+                                                      Width="14" 
+                                                      Height="20" 
+                                                      Stretch="Fill" 
+                                                      HorizontalAlignment="Right" 
+                                                      VerticalAlignment="Top"
+                                                      Margin="0,0,10,0"/>
 
                                                 <!-- Bottom Source Pill Overlay -->
                                                 <Border HorizontalAlignment="Left" 

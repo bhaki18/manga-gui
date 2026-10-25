@@ -60,6 +60,35 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(NumberLabel));
     }
 
+        [RelayCommand]
+    public async Task ShowHistoryAsync()
+    {
+        ActiveTab = "Cronologia";
+        SelectedItem = null;
+        SearchQuery = string.Empty;
+        IsLoading = true;
+        StatusText = "Caricamento anime e manga guardati...";
+        Items.Clear();
+
+        try
+        {
+            var history = await _cliService.GetHistoryAsync();
+            foreach (var item in history)
+            {
+                Items.Add(item);
+            }
+            StatusText = $"Cronologia: {Items.Count} titoli guardati / letti";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Errore cronologia: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
     [RelayCommand]
     public async Task SwitchTab(string tabName)
     {

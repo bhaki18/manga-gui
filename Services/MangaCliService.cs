@@ -66,6 +66,20 @@ public class MangaCliService
         }
     }
 
+        public async Task<List<MediaItem>> GetHistoryAsync()
+    {
+        try
+        {
+            var json = await RunCommandAsync("--history --json");
+            return JsonSerializer.Deserialize<List<MediaItem>>(json) ?? new List<MediaItem>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching history: {ex.Message}");
+            return new List<MediaItem>();
+        }
+    }
+
     public async Task<List<MediaItem>> GetMangaCatalogAsync(string? source = null)
     {
         try
