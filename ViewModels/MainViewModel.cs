@@ -33,6 +33,9 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private string _selectedSource = "all";
 
+    public string ActionButtonText => SelectedItem?.Type.ToLower() == "manga" ? "📖 LEGGI ORA" : "▶ INIZIA A GUARDARE";
+    public string NumberLabel => SelectedItem?.Type.ToLower() == "manga" ? "Capitolo:" : "Episodio:";
+
     public ObservableCollection<MediaItem> Items { get; } = new();
 
     public ObservableCollection<string> Sources { get; } = new()
@@ -49,6 +52,12 @@ public partial class MainViewModel : ViewModelBase
     {
         _cliService = new MangaCliService();
         _ = LoadInitialCatalogAsync();
+    }
+
+    partial void OnSelectedItemChanged(MediaItem? value)
+    {
+        OnPropertyChanged(nameof(ActionButtonText));
+        OnPropertyChanged(nameof(NumberLabel));
     }
 
     [RelayCommand]
@@ -147,19 +156,21 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    public void PlayOrRead()
+    public async Task PlayOrReadAsync()
     {
         if (SelectedItem == null) return;
 
         if (SelectedItem.Type.ToLower() == "anime")
         {
-            StatusText = $"Avvio riproduzione {SelectedItem.Title} (Episodio {SelectedNumber})...";
-            _cliService.PlayStream(SelectedItem.Title, SelectedNumber, SelectedItem.Source);
+            StatusText = $"Avvio player per {SelectedItem.Title} (Episodio {SelectedNumber})...";
+            await _cliService.PlayStreamAsync(SelectedItem.Title, SelectedNumber, SelectedItem.Source);
+            StatusText = $"In riproduzione: {SelectedItem.Title} (Episodio {SelectedNumber})";
         }
         else
         {
-            StatusText = $"Apertura {SelectedItem.Title} (Capitolo {SelectedNumber})...";
-            _cliService.ReadManga(SelectedItem.Title, SelectedNumber, SelectedItem.Source);
+            StatusText = $"Apertura lettore per {SelectedItem.Title} (Capitolo {SelectedNumber})...";
+            await _cliService.ReadMangaAsync(SelectedItem.Title, SelectedNumber, SelectedItem.Source);
+            StatusText = $"In lettura: {SelectedItem.Title} (Capitolo {SelectedNumber})";
         }
     }
 

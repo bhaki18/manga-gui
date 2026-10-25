@@ -39,6 +39,8 @@ public class MangaCliService
             psi.Arguments = arguments;
         }
 
+        PassDisplayEnv(psi);
+
         using var process = Process.Start(psi) 
             ?? throw new InvalidOperationException("Failed to start manga-cli process");
 
@@ -111,15 +113,76 @@ public class MangaCliService
         }
     }
 
-    public void PlayStream(string title, int episode, string? source = null)
+    public async Task<bool> PlayStreamAsync(string title, int episode, string? source = null)
     {
         var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
-        _ = RunCommandAsync($"\"{title}\" -a -e {episode} {srcArg}");
+        try
+        {
+            // Try getting the direct stream URL first for instant MPV playback
+            var streamUrl = await RunCommandAsync($"\"{title}\" -a -e {episode} {srcArg} --get-url");
+            var cleanUrl = streamUrl.Trim();
+            if (!string.IsNullOrWhiteSpace(cleanUrl) && (cleanUrl.StartsWith("http://") || cleanUrl.StartsWith("https://")))
+            {
+                var mpvPsi = new ProcessStartInfo
+                {
+                    FileName = "mpv",
+                    Arguments = $"\"{cleanUrl}\" --title=\"{title} - Episodio {episode}\" --force-window=immediate --save-position-on-quit",
+                    UseShellExecute = false
+                };
+                PassDisplayEnv(mpvPsi);
+                Process.Start(mpvPsi);
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Direct MPV extraction error: {ex.Message}");
+        }
+
+        // Fallback: Launch manga-cli player detached
+        LaunchDetached($"\"{title}\" -a -e {episode} {srcArg}");
+        return true;
     }
 
-    public void ReadManga(string title, int chapter, string? source = null)
+    public Task<bool> ReadMangaAsync(string title, int chapter, string? source = null)
     {
         var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" ? $"--source {source}" : "";
-        _ = RunCommandAsync($"\"{title}\" -m -C {chapter} {srcArg}");
+        LaunchDetached($"\"{title}\" -m -C {chapter} {srcArg}");
+        return Task.FromResult(true);
+    }
+
+    private void LaunchDetached(string arguments)
+    {
+        var psi = new ProcessStartInfo
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        if (_cliScriptPath.EndsWith(".js") && File.Exists(_cliScriptPath))
+        {
+            psi.FileName = "node";
+            psi.Arguments = $"\"{_cliScriptPath}\" {arguments}";
+        }
+        else
+        {
+            psi.FileName = "manga-cli";
+            psi.Arguments = arguments;
+        }
+
+        PassDisplayEnv(psi);
+        Process.Start(psi);
+    }
+
+    private void PassDisplayEnv(ProcessStartInfo psi)
+    {
+        var display = Environment.GetEnvironmentVariable("DISPLAY");
+        if (!string.IsNullOrEmpty(display)) psi.Environment["DISPLAY"] = display;
+
+        var wayland = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
+        if (!string.IsNullOrEmpty(wayland)) psi.Environment["WAYLAND_DISPLAY"] = wayland;
+
+        var xdg = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+        if (!string.IsNullOrEmpty(xdg)) psi.Environment["XDG_RUNTIME_DIR"] = xdg;
     }
 }
