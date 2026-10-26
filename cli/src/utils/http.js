@@ -1,4 +1,20 @@
 const { execFile } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+
+function getCurlBinary() {
+  const possiblePaths = [
+    path.join(process.cwd(), 'curl.exe'),
+    path.join(__dirname, '..', '..', 'curl.exe'),
+    path.join(__dirname, '..', '..', '..', 'curl.exe'),
+    path.join(__dirname, 'curl.exe')
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return 'curl';
+}
+
 
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const DOH_RESOLVER = 'https://1.1.1.1/dns-query';
@@ -24,7 +40,7 @@ function fetchHtml(url, referer = null) {
 
     args.push(url);
 
-    execFile('curl', args, { maxBuffer: 20 * 1024 * 1024 }, (err, stdout) => {
+    execFile(getCurlBinary(), args, { maxBuffer: 20 * 1024 * 1024 }, (err, stdout) => {
       if (err) {
         return reject(new Error(`cURL error: ${err.message}`));
       }
@@ -63,7 +79,7 @@ function checkUrlExists(url, referer = null) {
     }
     args.push(url);
 
-    execFile('curl', args, (err, stdout) => {
+    execFile(getCurlBinary(), args, (err, stdout) => {
       if (err) return resolve(false);
       const is200 = stdout && (stdout.includes('200 OK') || stdout.includes('HTTP/2 200') || stdout.includes('HTTP/1.1 200'));
       resolve(is200);
@@ -89,7 +105,7 @@ function downloadToFile(url, destPath, referer = null) {
     }
     args.push(url);
 
-    execFile('curl', args, (err) => {
+    execFile(getCurlBinary(), args, (err) => {
       if (err) return reject(err);
       resolve(destPath);
     });

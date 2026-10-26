@@ -18,8 +18,39 @@ public class MangaCliService
 
     static MangaCliService()
     {
+        _historyFile = ResolveHistoryFilePath();
+    }
+
+    public static string ResolveHistoryFilePath()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var user = Environment.UserName;
+            var wineHost = Path.Combine("Z:", "home", user, ".local", "state", "manga-cli", "history.json");
+            if (File.Exists(wineHost)) return wineHost;
+
+            var envUser = Environment.GetEnvironmentVariable("USER") ?? Environment.GetEnvironmentVariable("USERNAME");
+            if (!string.IsNullOrEmpty(envUser))
+            {
+                var wineHostEnv = Path.Combine("Z:", "home", envUser, ".local", "state", "manga-cli", "history.json");
+                if (File.Exists(wineHostEnv)) return wineHostEnv;
+            }
+
+            if (Directory.Exists(Path.Combine("Z:", "home", user)))
+            {
+                var wineHostDir = Path.Combine("Z:", "home", user, ".local", "state", "manga-cli");
+                Directory.CreateDirectory(wineHostDir);
+                return Path.Combine(wineHostDir, "history.json");
+            }
+        }
+
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        _historyFile = Path.Combine(home, ".local", "state", "manga-cli", "history.json");
+        var standard = Path.Combine(home, ".local", "state", "manga-cli", "history.json");
+        if (File.Exists(standard)) return standard;
+
+        var dir = Path.GetDirectoryName(standard);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        return standard;
     }
 
     public MangaCliService()
@@ -166,12 +197,52 @@ public class MangaCliService
         return string.IsNullOrWhiteSpace(clean) ? "unnamed" : clean;
     }
 
+    private static bool HasActualDownloads(string basePath)
+    {
+        try
+        {
+            if (!Directory.Exists(basePath)) return false;
+            var anime = Path.Combine(basePath, "Anime");
+            if (Directory.Exists(anime) && Directory.GetFileSystemEntries(anime).Length > 0) return true;
+            var manga = Path.Combine(basePath, "Manga");
+            if (Directory.Exists(manga) && Directory.GetFileSystemEntries(manga).Length > 0) return true;
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static string GetBaseDownloadDirectory()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            var user = Environment.UserName;
+            var wineHost = Path.Combine("Z:", "home", user, ".config", "manga-gui", "Downloaded");
+            if (HasActualDownloads(wineHost)) return wineHost;
+
+            var envUser = Environment.GetEnvironmentVariable("USER") ?? Environment.GetEnvironmentVariable("USERNAME");
+            if (!string.IsNullOrEmpty(envUser))
+            {
+                var wineHostEnv = Path.Combine("Z:", "home", envUser, ".config", "manga-gui", "Downloaded");
+                if (HasActualDownloads(wineHostEnv)) return wineHostEnv;
+            }
+
+            if (Directory.Exists(Path.Combine("Z:", "home", user)))
+            {
+                Directory.CreateDirectory(wineHost);
+                return wineHost;
+            }
+        }
+
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var standard = Path.Combine(home, ".config", "manga-gui", "Downloaded");
+        if (HasActualDownloads(standard)) return standard;
+
         var alt = Path.Combine(home, ".config", "manga-gui", "Dowloaded");
         if (Directory.Exists(alt) && !Directory.Exists(standard)) return alt;
+
         Directory.CreateDirectory(standard);
         return standard;
     }
@@ -941,7 +1012,7 @@ public class MangaCliService
         return exeName;
     }
 
-    private static void PassDisplayEnv(ProcessStartInfo psi)
+    public static void PassDisplayEnv(ProcessStartInfo psi)
     {
         if (OperatingSystem.IsWindows()) return;
         var display = Environment.GetEnvironmentVariable("DISPLAY");

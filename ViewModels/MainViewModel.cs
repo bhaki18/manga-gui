@@ -335,6 +335,10 @@ public partial class MainViewModel : ViewModelBase
         {
             await ShowDownloadedAsync();
         }
+        else if (tabName == "History" || tabName == "Cronologia")
+        {
+            await ShowHistoryAsync();
+        }
         else
         {
             await LoadCatalogAsync();
@@ -598,10 +602,11 @@ public partial class MainViewModel : ViewModelBase
                     {
                         var psi = new ProcessStartInfo
                         {
-                            FileName = "mpv",
+                            FileName = MangaCliService.ResolveMpvPath(),
                             Arguments = $"\"{targetFile}\" --title=\"{SelectedItem.Title} (Episode {num} - Offline)\"",
                             UseShellExecute = false
                         };
+                        MangaCliService.PassDisplayEnv(psi);
                         Process.Start(psi);
                         StatusText = $"Playing offline: {SelectedItem.Title} ({Path.GetFileName(targetFile)})";
                         return;
@@ -613,10 +618,11 @@ public partial class MainViewModel : ViewModelBase
                     var targetDir = subDirs.FirstOrDefault(d => d.Contains($"{num}")) ?? subDirs.FirstOrDefault() ?? SelectedItem.LocalPath;
                     var psi = new ProcessStartInfo
                     {
-                        FileName = "mpv",
+                        FileName = MangaCliService.ResolveMpvPath(),
                         Arguments = $"\"{targetDir}\" --image-display-duration=inf --title=\"{SelectedItem.Title} (Chapter {num} - Offline)\"",
                         UseShellExecute = false
                     };
+                    MangaCliService.PassDisplayEnv(psi);
                     Process.Start(psi);
                     StatusText = $"Reading offline: {SelectedItem.Title} ({Path.GetFileName(targetDir)})";
                     return;

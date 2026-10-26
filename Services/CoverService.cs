@@ -25,6 +25,17 @@ public class CoverService
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var dir = Path.Combine(home, ".local", "state", "manga-cli");
+
+        if (OperatingSystem.IsWindows())
+        {
+            var user = Environment.UserName;
+            var wineHostDir = Path.Combine("Z:", "home", user, ".local", "state", "manga-cli");
+            if (File.Exists(Path.Combine(wineHostDir, "covers.json")))
+            {
+                dir = wineHostDir;
+            }
+        }
+
         Directory.CreateDirectory(dir);
         _cacheFile = Path.Combine(dir, "covers.json");
         LoadDiskCache();
