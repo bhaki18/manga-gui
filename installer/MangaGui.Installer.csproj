@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ApplicationIcon>..\Assets\manga-gui.ico</ApplicationIcon>
+    <AssemblyName>MangaGui-Setup</AssemblyName>
+    <RootNamespace>MangaGui.Installer</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="package.zip" />
+  </ItemGroup>
+</Project>

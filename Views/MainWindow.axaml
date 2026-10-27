@@ -7,7 +7,7 @@
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="MangaGui.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/manga-gui.ico"
         Title="Manga GUI"
         Width="1280" Height="800"
         MinWidth="950" MinHeight="600"
