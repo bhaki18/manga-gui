@@ -11,6 +11,9 @@ const MangaDexProvider = require('./mangadex');
 const MangapillProvider = require('./mangapill');
 const OnePiecePowerAnimeProvider = require('./onepiecepower-anime');
 const createAnimeWorldProvider = require('./community/animeworld');
+const createAnimeSaturnProvider = require('./community/animesaturn');
+const createAnimeUnityProvider = require('./community/animeunity');
+const createMangaWorldProvider = require('./community/mangaworld');
 
 const CONFIG_DIR = process.env.MANGA_CLI_CONFIG_DIR || 
   (process.env.XDG_CONFIG_HOME 
@@ -51,21 +54,33 @@ class ProviderManager {
     const mp = new MangapillProvider();
     const oppAnime = new OnePiecePowerAnimeProvider();
 
-    const AnimeWorldProvider = createAnimeWorldProvider({
+    const deps = {
       BaseProvider,
       BaseMangaProvider,
       BaseAnimeProvider,
       cheerio,
       ...http
-    });
+    };
+
+    const AnimeWorldProvider = createAnimeWorldProvider(deps);
+    const AnimeSaturnProvider = createAnimeSaturnProvider(deps);
+    const AnimeUnityProvider = createAnimeUnityProvider(deps);
+    const MangaWorldProvider = createMangaWorldProvider(deps);
+
     const aw = new AnimeWorldProvider();
+    const as = new AnimeSaturnProvider();
+    const au = new AnimeUnityProvider();
+    const mw = new MangaWorldProvider();
 
     this.mangaProviders.set(opp.id, opp);
+    this.mangaProviders.set(mw.id, mw);
     this.mangaProviders.set(md.id, md);
     this.mangaProviders.set(mp.id, mp);
 
     this.animeProviders.set(oppAnime.id, oppAnime);
     this.animeProviders.set(aw.id, aw);
+    this.animeProviders.set(as.id, as);
+    this.animeProviders.set(au.id, au);
   }
 
   loadCustomProviders() {
@@ -274,7 +289,7 @@ class ProviderManager {
     return null;
   }
 
-  async searchManga(query, lang = null, sourceFilter = null) {
+  async searchManga(query, lang = null, sourceFilter = null, filters = {}) {
     let providers = this.getMangaProviders();
 
     if (sourceFilter) {
@@ -288,9 +303,9 @@ class ProviderManager {
     const segmented = this.segmentQuery(query);
     const searchPromises = providers.map(async (provider) => {
       try {
-        let items = await provider.search(query, lang);
+        let items = await provider.search(query, lang, filters);
         if ((!Array.isArray(items) || items.length === 0) && segmented && segmented.toLowerCase() !== query.toLowerCase()) {
-          const fallbackItems = await provider.search(segmented, lang);
+          const fallbackItems = await provider.search(segmented, lang, filters);
           if (Array.isArray(fallbackItems) && fallbackItems.length > 0) {
             items = fallbackItems;
           }
@@ -318,7 +333,7 @@ class ProviderManager {
     return this.interleaveArrays(arrays);
   }
 
-  async searchAnime(query, lang = null, sourceFilter = null) {
+  async searchAnime(query, lang = null, sourceFilter = null, filters = {}) {
     let providers = this.getAnimeProviders();
 
     if (sourceFilter) {
@@ -332,9 +347,9 @@ class ProviderManager {
     const segmented = this.segmentQuery(query);
     const searchPromises = providers.map(async (provider) => {
       try {
-        let items = await provider.search(query, lang);
+        let items = await provider.search(query, lang, filters);
         if ((!Array.isArray(items) || items.length === 0) && segmented && segmented.toLowerCase() !== query.toLowerCase()) {
-          const fallbackItems = await provider.search(segmented, lang);
+          const fallbackItems = await provider.search(segmented, lang, filters);
           if (Array.isArray(fallbackItems) && fallbackItems.length > 0) {
             items = fallbackItems;
           }
@@ -366,7 +381,7 @@ class ProviderManager {
   /**
    * Retrieves the manga catalog (either all providers or a specific provider)
    */
-  async getMangaCatalog(sourceFilter = null, lang = null) {
+  async getMangaCatalog(sourceFilter = null, lang = null, filters = {}) {
     let providers = this.getMangaProviders();
 
     if (sourceFilter) {
@@ -381,9 +396,9 @@ class ProviderManager {
       try {
         let items = [];
         if (typeof provider.getCatalog === 'function') {
-          items = await provider.getCatalog(lang);
+          items = await provider.getCatalog(lang, filters);
         } else if (typeof provider.search === 'function') {
-          items = await provider.search('', lang);
+          items = await provider.search('', lang, filters);
         }
         if (!Array.isArray(items)) return [];
         return items.map(item => ({
@@ -411,7 +426,7 @@ class ProviderManager {
   /**
    * Retrieves the anime catalog (either all providers or a specific provider)
    */
-  async getAnimeCatalog(sourceFilter = null, lang = null) {
+  async getAnimeCatalog(sourceFilter = null, lang = null, filters = {}) {
     let providers = this.getAnimeProviders();
 
     if (sourceFilter) {
@@ -426,9 +441,9 @@ class ProviderManager {
       try {
         let items = [];
         if (typeof provider.getCatalog === 'function') {
-          items = await provider.getCatalog(lang);
+          items = await provider.getCatalog(lang, filters);
         } else if (typeof provider.search === 'function') {
-          items = await provider.search('', lang);
+          items = await provider.search('', lang, filters);
         }
         if (!Array.isArray(items)) return [];
         return items.map(item => ({
@@ -456,9 +471,9 @@ class ProviderManager {
 
   /**
    * Retrieves full catalog (Manga and/or Anime) according to options
-   * @param {{ type?: 'all'|'manga'|'anime', source?: string|null, lang?: string|null }} options
+   * @param {{ type?: 'all'|'manga'|'anime', source?: string|null, lang?: string|null, filters?: { genre?: string, audio?: string } }} options
    */
-  async getFullCatalog({ type = 'all', source = null, lang = null } = {}) {
+  async getFullCatalog({ type = 'all', source = null, lang = null, filters = {} } = {}) {
     const catalog = { manga: [], anime: [] };
 
     if (source && type === 'all') {
@@ -466,21 +481,21 @@ class ProviderManager {
       const hasAnime = this.getAnimeProviders().some(p => this.matchesSource(p, source));
 
       if (hasManga && !hasAnime) {
-        catalog.manga = await this.getMangaCatalog(source, lang);
+        catalog.manga = await this.getMangaCatalog(source, lang, filters);
       } else if (hasAnime && !hasManga) {
-        catalog.anime = await this.getAnimeCatalog(source, lang);
+        catalog.anime = await this.getAnimeCatalog(source, lang, filters);
       } else {
-        catalog.manga = await this.getMangaCatalog(source, lang);
-        catalog.anime = await this.getAnimeCatalog(source, lang);
+        catalog.manga = await this.getMangaCatalog(source, lang, filters);
+        catalog.anime = await this.getAnimeCatalog(source, lang, filters);
       }
       return catalog;
     }
 
     if (type === 'manga' || type === 'all') {
-      catalog.manga = await this.getMangaCatalog(source, lang);
+      catalog.manga = await this.getMangaCatalog(source, lang, filters);
     }
     if (type === 'anime' || type === 'all') {
-      catalog.anime = await this.getAnimeCatalog(source, lang);
+      catalog.anime = await this.getAnimeCatalog(source, lang, filters);
     }
 
     return catalog;

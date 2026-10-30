@@ -52,6 +52,36 @@ public partial class MainViewModel : ViewModelBase
     private string _selectedSource = "All sources";
 
     [ObservableProperty]
+    private string _selectedLanguage = "All languages";
+
+    [ObservableProperty]
+    private string _selectedGenre = "All genres";
+
+    [ObservableProperty]
+    private string _selectedAudioFilter = "All Audio (Sub & Dub)";
+
+    private bool _isResettingFilters;
+    private bool _isUpdatingAudioFilters;
+
+    [ObservableProperty]
+    private bool _isSearchHistoryOpen;
+
+    public ObservableCollection<string> SearchHistory { get; } = new();
+    public bool HasSearchHistory => SearchHistory.Count > 0;
+    public bool ShowSearchHistoryChips => HasSearchHistory && (ActiveTab == "Anime" || ActiveTab == "Manga");
+    public bool IsAnimeTabActive => ActiveTab == "Anime";
+    public bool IsBrowseTabActive => ActiveTab == "Anime" || ActiveTab == "Manga";
+    public bool HasActiveFilters =>
+        SelectedGenre != "All genres" ||
+        (ActiveTab == "Anime" && MangaCliService.ResolveAudioCode(SelectedAudioFilter) != "all") ||
+        SelectedSource != "All sources";
+
+    public string QuickSubButtonText => GetAudioOptionsForLanguage(SelectedLanguage).quickSubText;
+    public string QuickDubButtonText => GetAudioOptionsForLanguage(SelectedLanguage).quickDubText;
+    public string QuickSubButtonBorder => MangaCliService.ResolveAudioCode(SelectedAudioFilter) == "sub" ? "#FF640A" : "#2C2D35";
+    public string QuickDubButtonBorder => MangaCliService.ResolveAudioCode(SelectedAudioFilter) == "dub" ? "#FF640A" : "#2C2D35";
+
+    [ObservableProperty]
     private bool _isConfirmDialogVisible;
 
     [ObservableProperty]
@@ -85,12 +115,25 @@ public partial class MainViewModel : ViewModelBase
         _ => ActiveTab
     };
 
-    public string PageSubHeader => ActiveTab switch
+    public string PageSubHeader
     {
-        "Downloaded" or "Downloads" => "Installed Anime & Manga (.config/manga-gui/Downloaded)",
-        "History" or "Cronologia" => "Recently Watched & Read",
-        _ => "Popular"
-    };
+        get
+        {
+            if (ActiveTab == "Downloaded" || ActiveTab == "Downloads")
+                return "Installed Anime & Manga (.config/manga-gui/Downloaded)";
+            if (ActiveTab == "History" || ActiveTab == "Cronologia")
+                return "Recently Watched & Read";
+
+            var parts = new System.Collections.Generic.List<string> { "Popular" };
+            if (!string.IsNullOrWhiteSpace(SelectedGenre) && SelectedGenre != "All genres")
+                parts.Add($"Genre: {SelectedGenre}");
+            if (ActiveTab == "Anime" && MangaCliService.ResolveAudioCode(SelectedAudioFilter) != "all")
+                parts.Add($"Audio: {SelectedAudioFilter}");
+            if (!string.IsNullOrWhiteSpace(SelectedSource) && SelectedSource != "All sources")
+                parts.Add($"Source: {MangaCliService.FormatSourceName(SelectedSource)}");
+            return string.Join("  •  ", parts);
+        }
+    }
 
     public ObservableCollection<MediaItem> Items { get; } = new();
 
@@ -98,10 +141,163 @@ public partial class MainViewModel : ViewModelBase
     {
         "All sources",
         "animeworld",
+        "animesaturn",
+        "animeunity",
         "onepiecepower",
         "onepiecepower-anime",
+        "mangaworld",
         "mangadex",
         "mangapill"
+    };
+
+    public ObservableCollection<string> Genres { get; } = new()
+    {
+        "All genres",
+        "Shounen",
+        "Seinen",
+        "Isekai",
+        "Action (Azione)",
+        "Adventure (Avventura)",
+        "Fantasy",
+        "Comedy (Commedia)",
+        "Romance (Romantico)",
+        "Drama (Drammatico)",
+        "Sci-Fi (Fantascienza)",
+        "Horror",
+        "Mystery (Mistero)",
+        "Supernatural (Soprannaturale)",
+        "Slice of Life",
+        "Sports (Sport)",
+        "Psychological (Psicologico)",
+        "Thriller",
+        "Ecchi",
+        "Mecha",
+        "Martial Arts (Arti Marziali)",
+        "School (Scolastico)",
+        "Historical (Storico)",
+        "Shoujo"
+    };
+
+    public ObservableCollection<string> QuickGenres { get; } = new()
+    {
+        "All genres",
+        "Shounen",
+        "Isekai",
+        "Seinen",
+        "Action (Azione)",
+        "Fantasy",
+        "Comedy (Commedia)",
+        "Romance (Romantico)",
+        "Horror",
+        "Mystery (Mistero)",
+        "Sports (Sport)",
+        "Psychological (Psicologico)",
+        "Slice of Life",
+        "Sci-Fi (Fantascienza)"
+    };
+
+    public ObservableCollection<string> AudioFilters { get; } = new()
+    {
+        "All Audio (Sub & Dub)",
+        "Sub (Subtitled / Sottotitolato)",
+        "Dub (Dubbed / Doppiato)"
+    };
+
+    private static (string allOption, string subOption, string dubOption, string quickSubText, string quickDubText) GetAudioOptionsForLanguage(string? selectedLanguage)
+    {
+        var code = MangaCliService.ResolveLanguageCode(selectedLanguage);
+        if (string.IsNullOrWhiteSpace(code) || code == "all")
+        {
+            return (
+                "All Audio (Sub & Dub)",
+                "Sub (Subtitled / Sottotitolato)",
+                "Dub (Dubbed / Doppiato)",
+                "💬 Solo Sub",
+                "🎙️ Solo Dub"
+            );
+        }
+
+        var upper = code.ToUpperInvariant();
+        var (flag, subDesc, dubDesc) = code switch
+        {
+            "it" => ("🇮🇹", "Sottotitolato", "Doppiato"),
+            "en" => ("🇬🇧", "Subtitled", "Dubbed"),
+            "es" => ("🇪🇸", "Subtitulado", "Doblado"),
+            "fr" => ("🇫🇷", "Sous-titré", "Doublé"),
+            "de" => ("🇩🇪", "Untertitelt", "Synchronisiert"),
+            "pt-br" => ("🇧🇷", "Legendado", "Dublado"),
+            "ru" => ("🇷🇺", "Субтитры", "Дубляж"),
+            "ja" => ("🇯🇵", "Subtitled", "Original / Dub"),
+            "ar" => ("🇸🇦", "مترجم", "مدبلج"),
+            "pl" => ("🇵🇱", "Napisy", "Dubbing"),
+            "tr" => ("🇹🇷", "Altyazılı", "Dublaj"),
+            "id" => ("🇮🇩", "Subtitle", "Dubbing"),
+            "vi" => ("🇻🇳", "Vietsub", "Thuyết minh"),
+            "ko" => ("🇰🇷", "자막", "더빙"),
+            "zh" => ("🇨🇳", "字幕", "配音"),
+            _ => ("🌐", "Subtitled", "Dubbed")
+        };
+
+        return (
+            $"All Audio (Sub & Dub - {upper})",
+            $"Sub {upper} ({subDesc})",
+            $"Dub {upper} ({dubDesc})",
+            $"{flag} Solo Sub {upper}",
+            $"{flag} Solo Dub {upper}"
+        );
+    }
+
+    private void UpdateAudioFiltersForLanguage(string? lang)
+    {
+        var currentAudioCode = MangaCliService.ResolveAudioCode(SelectedAudioFilter);
+        var (allOpt, subOpt, dubOpt, _, _) = GetAudioOptionsForLanguage(lang);
+
+        _isUpdatingAudioFilters = true;
+        try
+        {
+            AudioFilters.Clear();
+            AudioFilters.Add(allOpt);
+            AudioFilters.Add(subOpt);
+            AudioFilters.Add(dubOpt);
+
+            SelectedAudioFilter = currentAudioCode switch
+            {
+                "sub" => subOpt,
+                "dub" => dubOpt,
+                _ => allOpt
+            };
+        }
+        finally
+        {
+            _isUpdatingAudioFilters = false;
+        }
+
+        OnPropertyChanged(nameof(QuickSubButtonText));
+        OnPropertyChanged(nameof(QuickDubButtonText));
+        OnPropertyChanged(nameof(QuickSubButtonBorder));
+        OnPropertyChanged(nameof(QuickDubButtonBorder));
+        OnPropertyChanged(nameof(HasActiveFilters));
+        OnPropertyChanged(nameof(PageSubHeader));
+    }
+
+    public ObservableCollection<string> Languages { get; } = new()
+    {
+        "All languages",
+        "Italiano (IT)",
+        "English (EN)",
+        "Español (ES)",
+        "Français (FR)",
+        "Deutsch (DE)",
+        "Português (PT-BR)",
+        "Русский (RU)",
+        "日本語 (JA)",
+        "العربية (AR)",
+        "Polski (PL)",
+        "Türkçe (TR)",
+        "Indonesian (ID)",
+        "Tiếng Việt (VI)",
+        "한국어 (KO)",
+        "中文 (ZH)"
     };
 
     private bool _isUpdatingSources;
@@ -109,8 +305,8 @@ public partial class MainViewModel : ViewModelBase
     private void UpdateSourcesForTab(string tab)
     {
         string[] desired = tab == "Manga"
-            ? new[] { "All sources", "onepiecepower", "mangadex", "mangapill" }
-            : new[] { "All sources", "animeworld", "onepiecepower", "onepiecepower-anime" };
+            ? new[] { "All sources", "onepiecepower", "mangaworld", "mangadex", "mangapill" }
+            : new[] { "All sources", "animeworld", "animesaturn", "animeunity", "onepiecepower", "onepiecepower-anime" };
 
         _isUpdatingSources = true;
         try
@@ -142,7 +338,83 @@ public partial class MainViewModel : ViewModelBase
         _cliService = new MangaCliService();
         ParseCommandLineArgs(args);
         UpdateSourcesForTab(ActiveTab);
+        UpdateAudioFiltersForLanguage(SelectedLanguage);
+        _ = LoadSearchHistoryAsync();
         _ = LoadInitialCatalogAsync();
+    }
+
+    private void RefreshSearchHistoryCollection(System.Collections.Generic.List<string> list)
+    {
+        SearchHistory.Clear();
+        foreach (var item in list.Take(5))
+        {
+            SearchHistory.Add(item);
+        }
+        OnPropertyChanged(nameof(HasSearchHistory));
+        OnPropertyChanged(nameof(ShowSearchHistoryChips));
+        if (SearchHistory.Count == 0)
+        {
+            IsSearchHistoryOpen = false;
+        }
+    }
+
+    private async Task LoadSearchHistoryAsync()
+    {
+        var list = await _cliService.GetSearchHistoryAsync();
+        RefreshSearchHistoryCollection(list);
+    }
+
+    public void OpenSearchHistory()
+    {
+        if (SearchHistory.Count > 0)
+        {
+            IsSearchHistoryOpen = true;
+        }
+    }
+
+    [RelayCommand]
+    public void CloseSearchHistory()
+    {
+        IsSearchHistoryOpen = false;
+    }
+
+    [RelayCommand]
+    public void ToggleSearchHistory()
+    {
+        if (SearchHistory.Count == 0)
+        {
+            IsSearchHistoryOpen = false;
+            return;
+        }
+        IsSearchHistoryOpen = !IsSearchHistoryOpen;
+    }
+
+    [RelayCommand]
+    public async Task SelectSearchHistoryAsync(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return;
+        IsSearchHistoryOpen = false;
+        SearchQuery = query;
+        if (ActiveTab != "Anime" && ActiveTab != "Manga")
+        {
+            ActiveTab = "Anime";
+        }
+        await SearchAsync();
+    }
+
+    [RelayCommand]
+    public async Task RemoveSearchHistoryItemAsync(string? query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return;
+        var updated = await _cliService.RemoveSearchHistoryItemAsync(query);
+        RefreshSearchHistoryCollection(updated);
+    }
+
+    [RelayCommand]
+    public async Task ClearSearchHistoryAsync()
+    {
+        await _cliService.ClearSearchHistoryAsync();
+        RefreshSearchHistoryCollection(new System.Collections.Generic.List<string>());
     }
 
     private void ParseCommandLineArgs(string[]? args)
@@ -176,6 +448,12 @@ public partial class MainViewModel : ViewModelBase
             {
                 SelectedSource = args[++i];
             }
+            else if ((arg == "--lang" || arg == "-l") && i + 1 < args.Length)
+            {
+                var code = MangaCliService.ResolveLanguageCode(args[++i]);
+                var matched = Languages.FirstOrDefault(l => MangaCliService.ResolveLanguageCode(l) == code);
+                SelectedLanguage = matched ?? code;
+            }
             else if (!arg.StartsWith("-") && string.IsNullOrWhiteSpace(SearchQuery))
             {
                 SearchQuery = args[i];
@@ -185,7 +463,9 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnSelectedSourceChanged(string value)
     {
-        if (_isUpdatingSources || string.IsNullOrWhiteSpace(value)) return;
+        OnPropertyChanged(nameof(HasActiveFilters));
+        OnPropertyChanged(nameof(PageSubHeader));
+        if (_isUpdatingSources || _isResettingFilters || string.IsNullOrWhiteSpace(value)) return;
         if (ActiveTab == "Anime" || ActiveTab == "Manga")
         {
             if (!string.IsNullOrWhiteSpace(SearchQuery))
@@ -197,6 +477,112 @@ public partial class MainViewModel : ViewModelBase
                 _ = LoadCatalogAsync();
             }
         }
+    }
+
+    partial void OnSelectedLanguageChanged(string value)
+    {
+        UpdateAudioFiltersForLanguage(value);
+        if (_isResettingFilters || string.IsNullOrWhiteSpace(value)) return;
+        if (ActiveTab == "Anime" || ActiveTab == "Manga")
+        {
+            if (!string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                _ = SearchAsync();
+            }
+            else
+            {
+                _ = LoadCatalogAsync();
+            }
+        }
+    }
+
+    partial void OnSelectedGenreChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasActiveFilters));
+        OnPropertyChanged(nameof(PageSubHeader));
+        if (_isResettingFilters || string.IsNullOrWhiteSpace(value)) return;
+        if (ActiveTab == "Anime" || ActiveTab == "Manga")
+        {
+            if (!string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                _ = SearchAsync();
+            }
+            else
+            {
+                _ = LoadCatalogAsync();
+            }
+        }
+    }
+
+    partial void OnSelectedAudioFilterChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasActiveFilters));
+        OnPropertyChanged(nameof(PageSubHeader));
+        OnPropertyChanged(nameof(QuickSubButtonBorder));
+        OnPropertyChanged(nameof(QuickDubButtonBorder));
+        if (_isUpdatingAudioFilters || _isResettingFilters || string.IsNullOrWhiteSpace(value)) return;
+        if (ActiveTab == "Anime")
+        {
+            if (!string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                _ = SearchAsync();
+            }
+            else
+            {
+                _ = LoadCatalogAsync();
+            }
+        }
+    }
+
+    [RelayCommand]
+    public void SelectQuickGenre(string? genre)
+    {
+        if (string.IsNullOrWhiteSpace(genre)) return;
+        SelectedGenre = genre;
+    }
+
+    [RelayCommand]
+    public void SelectQuickAudio(string? audio)
+    {
+        if (string.IsNullOrWhiteSpace(audio)) return;
+        var targetCode = MangaCliService.ResolveAudioCode(audio);
+        var currentCode = MangaCliService.ResolveAudioCode(SelectedAudioFilter);
+        var (allOpt, subOpt, dubOpt, _, _) = GetAudioOptionsForLanguage(SelectedLanguage);
+
+        if (targetCode == currentCode && targetCode != "all")
+        {
+            SelectedAudioFilter = allOpt;
+            return;
+        }
+
+        SelectedAudioFilter = targetCode switch
+        {
+            "sub" => subOpt,
+            "dub" => dubOpt,
+            _ => allOpt
+        };
+    }
+
+    [RelayCommand]
+    public async Task ResetFiltersAsync()
+    {
+        _isResettingFilters = true;
+        try
+        {
+            SelectedGenre = "All genres";
+            SelectedAudioFilter = GetAudioOptionsForLanguage(SelectedLanguage).allOption;
+            SelectedSource = "All sources";
+            SearchQuery = string.Empty;
+        }
+        finally
+        {
+            _isResettingFilters = false;
+        }
+        OnPropertyChanged(nameof(HasActiveFilters));
+        OnPropertyChanged(nameof(PageSubHeader));
+        OnPropertyChanged(nameof(QuickSubButtonBorder));
+        OnPropertyChanged(nameof(QuickDubButtonBorder));
+        await LoadCatalogAsync();
     }
 
     partial void OnActiveTabChanged(string value)
@@ -213,6 +599,10 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PageSubHeader));
         OnPropertyChanged(nameof(IsHistoryTabActive));
         OnPropertyChanged(nameof(IsDownloadedTabActive));
+        OnPropertyChanged(nameof(IsAnimeTabActive));
+        OnPropertyChanged(nameof(IsBrowseTabActive));
+        OnPropertyChanged(nameof(HasActiveFilters));
+        OnPropertyChanged(nameof(ShowSearchHistoryChips));
     }
 
     partial void OnSelectedItemChanged(MediaItem? value)
@@ -319,7 +709,7 @@ public partial class MainViewModel : ViewModelBase
                     StatusText = $"Downloading {title} ({unit} {num}): {prog}";
                     OnPropertyChanged(nameof(DownloadButtonText));
                 });
-            });
+            }, SelectedLanguage, SelectedAudioFilter);
             StatusText = msg;
             if (success && (ActiveTab == "Downloaded" || ActiveTab == "Downloads"))
             {
@@ -394,11 +784,20 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     public async Task SearchAsync()
     {
+        IsSearchHistoryOpen = false;
         if (string.IsNullOrWhiteSpace(SearchQuery))
         {
             await LoadCatalogAsync();
             return;
         }
+
+        if (ActiveTab != "Anime" && ActiveTab != "Manga")
+        {
+            ActiveTab = "Anime";
+        }
+
+        var updatedHistory = await _cliService.AddSearchHistoryAsync(SearchQuery);
+        RefreshSearchHistoryCollection(updatedHistory);
 
         IsLoading = true;
         StatusText = $"Searching for \"{SearchQuery}\"...";
@@ -407,17 +806,20 @@ public partial class MainViewModel : ViewModelBase
         try
         {
             var src = SelectedSource == "All sources" || SelectedSource == "Tutte le fonti" || SelectedSource == "all" ? null : SelectedSource;
+            var lang = SelectedLanguage;
+            var genre = SelectedGenre;
+            var audio = SelectedAudioFilter;
             if (ActiveTab == "Anime")
             {
-                var results = await _cliService.SearchAnimeAsync(SearchQuery, src);
+                var results = await _cliService.SearchAnimeAsync(SearchQuery, src, lang, genre, audio);
                 foreach (var item in results) Items.Add(item);
-                StatusText = $"Found {Items.Count} anime for \"{SearchQuery}\"";
+                StatusText = $"Found {Items.Count} anime for \"{SearchQuery}\" ({SelectedLanguage})";
             }
             else
             {
-                var results = await _cliService.SearchMangaAsync(SearchQuery, src);
+                var results = await _cliService.SearchMangaAsync(SearchQuery, src, lang, genre);
                 foreach (var item in results) Items.Add(item);
-                StatusText = $"Found {Items.Count} manga for \"{SearchQuery}\"";
+                StatusText = $"Found {Items.Count} manga for \"{SearchQuery}\" ({SelectedLanguage})";
             }
         }
         catch (Exception ex)
@@ -434,23 +836,26 @@ public partial class MainViewModel : ViewModelBase
     public async Task LoadCatalogAsync()
     {
         IsLoading = true;
-        StatusText = $"Loading {ActiveTab} catalog...";
+        StatusText = $"Loading {ActiveTab} catalog ({SelectedLanguage})...";
         Items.Clear();
 
         try
         {
             var src = SelectedSource == "All sources" || SelectedSource == "Tutte le fonti" || SelectedSource == "all" ? null : SelectedSource;
+            var lang = SelectedLanguage;
+            var genre = SelectedGenre;
+            var audio = SelectedAudioFilter;
             if (ActiveTab == "Anime")
             {
-                var catalog = await _cliService.GetAnimeCatalogAsync(src);
+                var catalog = await _cliService.GetAnimeCatalogAsync(src, lang, genre, audio);
                 foreach (var item in catalog) Items.Add(item);
-                StatusText = $"Anime Catalog: {Items.Count} titles ready";
+                StatusText = $"Anime Catalog: {Items.Count} titles ready ({SelectedLanguage})";
             }
             else
             {
-                var catalog = await _cliService.GetMangaCatalogAsync(src);
+                var catalog = await _cliService.GetMangaCatalogAsync(src, lang, genre);
                 foreach (var item in catalog) Items.Add(item);
-                StatusText = $"Manga Catalog: {Items.Count} titles ready";
+                StatusText = $"Manga Catalog: {Items.Count} titles ready ({SelectedLanguage})";
             }
         }
         catch (Exception ex)
@@ -481,7 +886,7 @@ public partial class MainViewModel : ViewModelBase
     {
         try
         {
-            var total = await _cliService.GetMediaDetailsAsync(item);
+            var total = await _cliService.GetMediaDetailsAsync(item, SelectedLanguage);
             if (SelectedItem == item && total > 0)
             {
                 MaxNumber = Math.Max((decimal)total, SelectedNumber);
@@ -683,13 +1088,13 @@ public partial class MainViewModel : ViewModelBase
         if (SelectedItem.Type.ToLower() == "anime")
         {
             StatusText = $"Loading stream for {SelectedItem.Title} (Episode {num})...";
-            var (success, msg) = await _cliService.PlayStreamAsync(SelectedItem, num);
+            var (success, msg) = await _cliService.PlayStreamAsync(SelectedItem, num, SelectedAudioFilter);
             StatusText = msg;
         }
         else
         {
             StatusText = $"Loading pages for {SelectedItem.Title} (Chapter {num})...";
-            var (success, msg) = await _cliService.ReadMangaAsync(SelectedItem, num);
+            var (success, msg) = await _cliService.ReadMangaAsync(SelectedItem, num, SelectedLanguage);
             StatusText = msg;
         }
     }

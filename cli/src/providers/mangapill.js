@@ -1,6 +1,7 @@
 const cheerio = require('cheerio');
 const BaseProvider = require('./base');
 const { fetchHtml } = require('../utils/http');
+const { getGenreConfig } = require('../utils/filters');
 
 class MangapillProvider extends BaseProvider {
   constructor() {
@@ -58,14 +59,20 @@ class MangapillProvider extends BaseProvider {
   /**
    * Search manga on Mangapill
    */
-  async search(query, lang = null) {
+  async search(query, lang = null, filters = {}) {
+    const cleanLang = lang ? String(lang).toLowerCase().trim() : 'all';
+    if (cleanLang && cleanLang !== 'all' && cleanLang !== 'en') {
+      return [];
+    }
     if (!query || !query.trim()) {
-      return this.getCatalog();
+      return this.getCatalog(lang, filters);
     }
 
     try {
+      const genreCfg = getGenreConfig(filters?.genre);
+      const genreParam = genreCfg && genreCfg.mpGenre ? `&genre=${encodeURIComponent(genreCfg.mpGenre)}` : '';
       const cleanQuery = encodeURIComponent(query.trim());
-      const html = await fetchHtml(`${this.baseUrl}/search?q=${cleanQuery}`);
+      const html = await fetchHtml(`${this.baseUrl}/search?q=${cleanQuery}${genreParam}`);
       const $ = cheerio.load(html);
       const results = [];
       const seenUrls = new Set();
@@ -88,8 +95,14 @@ class MangapillProvider extends BaseProvider {
   /**
    * Fetch featured & recent catalog from Mangapill
    */
-  async getCatalog() {
-    if (this.catalogCache && this.catalogCache.length > 0) {
+  async getCatalog(lang = null, filters = {}) {
+    const cleanLang = lang ? String(lang).toLowerCase().trim() : 'all';
+    if (cleanLang && cleanLang !== 'all' && cleanLang !== 'en') {
+      return [];
+    }
+
+    const genreCfg = getGenreConfig(filters?.genre);
+    if (!genreCfg && this.catalogCache && this.catalogCache.length > 0) {
       return this.catalogCache;
     }
 
@@ -97,6 +110,14 @@ class MangapillProvider extends BaseProvider {
     const seenUrls = new Set();
 
     try {
+      if (genreCfg && genreCfg.mpGenre) {
+        const html = await fetchHtml(`${this.baseUrl}/search?q=&genre=${encodeURIComponent(genreCfg.mpGenre)}`).catch(() => '');
+        if (html) {
+          this._parseMangaCards(cheerio.load(html), results, seenUrls);
+        }
+        return results;
+      }
+
       const [homeHtml, newHtml] = await Promise.all([
         fetchHtml(`${this.baseUrl}/`).catch(() => ''),
         fetchHtml(`${this.baseUrl}/mangas/new`).catch(() => '')

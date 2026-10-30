@@ -76,35 +76,121 @@
                               Foreground="#FFFFFF"
                               FontSize="12"
                               Width="140"
+                              ToolTip.Tip="Filter by source"
+                              VerticalAlignment="Center"/>
+
+                    <!-- Language Selector -->
+                    <ComboBox ItemsSource="{Binding Languages}" 
+                              SelectedItem="{Binding SelectedLanguage}"
+                              CornerRadius="4"
+                              Background="#141519"
+                              BorderBrush="#2B2C30"
+                              Foreground="#FFFFFF"
+                              FontSize="12"
+                              Width="150"
+                              ToolTip.Tip="Filter by language"
                               VerticalAlignment="Center"/>
                 </StackPanel>
 
                 <!-- Right Tools (Search, Premium, Bookmark, User) -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="20" VerticalAlignment="Center">
-                    <!-- Search Input Box -->
-                    <Border Background="#141519" BorderBrush="#2B2C30" BorderThickness="1" CornerRadius="20" Padding="12,6" Width="240">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBox Grid.Column="0" 
-                                     Text="{Binding SearchQuery}" 
-                                     PlaceholderText="Search anime, manga..." 
-                                     Background="Transparent"
-                                     BorderThickness="0"
-                                     Padding="0"
-                                     FontSize="13"
-                                     Foreground="#FFFFFF">
-                                <TextBox.KeyBindings>
-                                    <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
-                                </TextBox.KeyBindings>
-                            </TextBox>
-                            <Button Grid.Column="1" 
-                                    Command="{Binding SearchCommand}"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Padding="4,0"
-                                    Content="🔍" 
-                                    Cursor="Hand" />
-                        </Grid>
-                    </Border>
+                    <!-- Search Input Box + Search History Dropdown -->
+                    <Panel VerticalAlignment="Center">
+                        <Border x:Name="SearchBoxBorder" Background="#141519" BorderBrush="#2B2C30" BorderThickness="1" CornerRadius="20" Padding="12,6" Width="240">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBox x:Name="SearchInputBox"
+                                         Grid.Column="0" 
+                                         Text="{Binding SearchQuery}" 
+                                         PlaceholderText="Search anime, manga..." 
+                                         GotFocus="OnSearchBoxGotFocus"
+                                         Tapped="OnSearchBoxTapped"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         Padding="0"
+                                         FontSize="13"
+                                         Foreground="#FFFFFF">
+                                    <TextBox.KeyBindings>
+                                        <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
+                                        <KeyBinding Gesture="Escape" Command="{Binding CloseSearchHistoryCommand}" />
+                                    </TextBox.KeyBindings>
+                                </TextBox>
+                                <Button Grid.Column="1" 
+                                        Command="{Binding SearchCommand}"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="4,0"
+                                        Content="🔍" 
+                                        Cursor="Hand" />
+                            </Grid>
+                        </Border>
+
+                        <Popup IsOpen="{Binding IsSearchHistoryOpen, Mode=TwoWay}"
+                               PlacementTarget="{Binding #SearchBoxBorder}"
+                               Placement="BottomEdgeAlignedLeft"
+                               VerticalOffset="6"
+                               Focusable="False"
+                               IsLightDismissEnabled="True">
+                            <Border Background="#18191E"
+                                    BorderBrush="#2C2D35"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Width="240"
+                                    Padding="8">
+                                <StackPanel Spacing="6">
+                                    <Grid ColumnDefinitions="*,Auto" Margin="4,2">
+                                        <TextBlock Grid.Column="0"
+                                                   Text="RECENT SEARCHES"
+                                                   FontSize="10"
+                                                   FontWeight="Bold"
+                                                   Foreground="#A0A0A0"
+                                                   VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1"
+                                                Command="{Binding ClearSearchHistoryCommand}"
+                                                Content="Clear all"
+                                                FontSize="10"
+                                                Foreground="#FF640A"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Padding="4,2"
+                                                Cursor="Hand"/>
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding SearchHistory}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                                                    <Button Grid.Column="0"
+                                                            Command="{Binding ((vm:MainViewModel)DataContext).SelectSearchHistoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            Background="Transparent"
+                                                            BorderThickness="0"
+                                                            HorizontalAlignment="Stretch"
+                                                            HorizontalContentAlignment="Left"
+                                                            Padding="6,5"
+                                                            Cursor="Hand">
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <TextBlock Text="🕒" FontSize="11" Foreground="#888888" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding}" FontSize="12" Foreground="#FFFFFF" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Grid.Column="1"
+                                                            Command="{Binding ((vm:MainViewModel)DataContext).RemoveSearchHistoryItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            Content="✕"
+                                                            FontSize="10"
+                                                            Foreground="#888888"
+                                                            Background="Transparent"
+                                                            BorderThickness="0"
+                                                            Padding="6,4"
+                                                            ToolTip.Tip="Remove from search history"
+                                                            Cursor="Hand"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                    </Panel>
 
 
 
@@ -189,6 +275,128 @@
                             </Button>
                         </StackPanel>
                     </Grid>
+
+                    <!-- DISCOVERY & FILTERS SECTION (Visible on Anime & Manga tabs) -->
+                    <Border IsVisible="{Binding IsBrowseTabActive}"
+                            Background="#0F1014"
+                            BorderBrush="#23252C"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="16,12"
+                            Margin="0,4,0,0">
+                        <StackPanel Spacing="12">
+                            <!-- Top Filter Controls Row -->
+                            <WrapPanel Orientation="Horizontal">
+                                <!-- Genre / Style Dropdown -->
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,20,6" VerticalAlignment="Center">
+                                    <TextBlock Text="🎭 Style / Genre:"
+                                               FontSize="12"
+                                               FontWeight="Bold"
+                                               Foreground="#A0A0A0"
+                                               VerticalAlignment="Center"/>
+                                    <ComboBox ItemsSource="{Binding Genres}"
+                                              SelectedItem="{Binding SelectedGenre}"
+                                              CornerRadius="4"
+                                              Background="#18191E"
+                                              BorderBrush="#2C2D35"
+                                              Foreground="#FFFFFF"
+                                              FontSize="12"
+                                              Width="210"
+                                              VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- Audio Filter Dropdown + Quick Sub/Dub Buttons (Anime only) -->
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="8"
+                                            Margin="0,0,20,6"
+                                            VerticalAlignment="Center"
+                                            IsVisible="{Binding IsAnimeTabActive}">
+                                    <TextBlock Text="🔊 Audio:"
+                                               FontSize="12"
+                                               FontWeight="Bold"
+                                               Foreground="#A0A0A0"
+                                               VerticalAlignment="Center"/>
+                                    <ComboBox ItemsSource="{Binding AudioFilters}"
+                                              SelectedItem="{Binding SelectedAudioFilter}"
+                                              CornerRadius="4"
+                                              Background="#18191E"
+                                              BorderBrush="#2C2D35"
+                                              Foreground="#FFFFFF"
+                                              FontSize="12"
+                                              Width="230"
+                                              VerticalAlignment="Center"/>
+                                    <Button Command="{Binding SelectQuickAudioCommand}"
+                                            CommandParameter="sub"
+                                            Content="{Binding QuickSubButtonText}"
+                                            Background="#18191E"
+                                            BorderBrush="{Binding QuickSubButtonBorder}"
+                                            BorderThickness="1"
+                                            CornerRadius="14"
+                                            Padding="10,5"
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Foreground="#E0E0E0"
+                                            Cursor="Hand"
+                                            VerticalAlignment="Center"/>
+                                    <Button Command="{Binding SelectQuickAudioCommand}"
+                                            CommandParameter="dub"
+                                            Content="{Binding QuickDubButtonText}"
+                                            Background="#18191E"
+                                            BorderBrush="{Binding QuickDubButtonBorder}"
+                                            BorderThickness="1"
+                                            CornerRadius="14"
+                                            Padding="10,5"
+                                            FontSize="11"
+                                            FontWeight="SemiBold"
+                                            Foreground="#E0E0E0"
+                                            Cursor="Hand"
+                                            VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- Reset Filters Button -->
+                                <Button Command="{Binding ResetFiltersCommand}"
+                                        IsVisible="{Binding HasActiveFilters}"
+                                        Content="✕ Reset Filters"
+                                        Background="#2A1B1B"
+                                        BorderBrush="#FF640A"
+                                        BorderThickness="1"
+                                        CornerRadius="14"
+                                        Padding="12,5"
+                                        Margin="0,0,0,6"
+                                        FontSize="11"
+                                        FontWeight="Bold"
+                                        Foreground="#FF640A"
+                                        Cursor="Hand"
+                                        VerticalAlignment="Center"/>
+                            </WrapPanel>
+
+                            <!-- Quick Genre / Style Pills Row -->
+                            <ItemsControl ItemsSource="{Binding QuickGenres}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Command="{Binding ((vm:MainViewModel)DataContext).SelectQuickGenreCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                Content="{Binding}"
+                                                Background="#18191E"
+                                                BorderBrush="#2C2D35"
+                                                BorderThickness="1"
+                                                CornerRadius="14"
+                                                Padding="11,5"
+                                                Margin="0,0,8,6"
+                                                FontSize="11"
+                                                FontWeight="SemiBold"
+                                                Foreground="#D8D8D8"
+                                                Cursor="Hand"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
 
                     <!-- SUB-HEADER CATEGORY -->
                     <TextBlock Text="{Binding PageSubHeader}" FontSize="16" FontWeight="SemiBold" Foreground="#FFFFFF" Margin="0,10,0,8"/>

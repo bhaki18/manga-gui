@@ -1,6 +1,7 @@
 const cheerio = require('cheerio');
 const BaseProvider = require('./base');
 const { fetchHtml, checkUrlExists } = require('../utils/http');
+const { getGenreConfig, matchesGenreText } = require('../utils/filters');
 
 const POPULAR_MANGA_KEYWORDS = [
   'one piece', 'berserk', 'jujutsu kaisen', 'chainsaw man', 'solo leveling',
@@ -120,11 +121,14 @@ class OnePiecePowerProvider extends BaseProvider {
   /**
    * Returns top/popular catalog for browsing
    */
-  async getCatalog(lang = null) {
+  async getCatalog(lang = null, filters = {}) {
     const all = await this.getAllManga();
-    const filtered = (lang && lang !== 'all')
-      ? all.filter(m => m.language === lang)
-      : all;
+    const genreCfg = getGenreConfig(filters?.genre);
+    const filtered = all.filter(m => {
+      if (lang && lang !== 'all' && m.language !== lang) return false;
+      if (genreCfg && !matchesGenreText(m.genres, filters.genre, m.title)) return false;
+      return true;
+    });
 
     const popular = [];
     const rest = [];
@@ -155,16 +159,18 @@ class OnePiecePowerProvider extends BaseProvider {
   /**
    * Search manga by keyword and optional language filter (searches full 2700+ archive)
    */
-  async search(query, lang = null) {
+  async search(query, lang = null, filters = {}) {
     if (!query || !query.trim()) {
-      return this.getCatalog(lang);
+      return this.getCatalog(lang, filters);
     }
     const catalog = await this.getAllManga();
+    const genreCfg = getGenreConfig(filters?.genre);
     const cleanQuery = query.toLowerCase().trim();
     const cleanNorm = cleanQuery.replace(/[^a-z0-9]/g, '');
 
     return catalog.filter(m => {
       if (lang && lang !== 'all' && m.language !== lang) return false;
+      if (genreCfg && !matchesGenreText(m.genres, filters.genre, m.title)) return false;
       const titleLower = m.title.toLowerCase();
       const matchTitle = titleLower.includes(cleanQuery) || 
                          (cleanNorm.length >= 3 && titleLower.replace(/[^a-z0-9]/g, '').includes(cleanNorm));

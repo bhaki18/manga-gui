@@ -60,6 +60,8 @@ program
   .option('-m, --manga', 'Read manga chapters')
   .option('-s, --source <id>', 'Filter search or selection to a specific source/provider ID (e.g. mangadex, onepiecepower, mangapill)')
   .option('-l, --lang <language>', 'Filter by scan/catalog language code (e.g. it, en, es, fr, ja)', null)
+  .option('--genre <genre>', 'Filter by genre/style (e.g. action, shounen, seinen, isekai, fantasy, romance, horror)', null)
+  .option('--audio <audio>', 'Filter anime by audio track (all, subita, ita)', null)
   .option('--dub', 'Prefer Italian dubbed audio (ITA) for anime')
   .option('--sub', 'Prefer Italian subtitled audio (SUB ITA) for anime')
   // Direct selection
@@ -678,12 +680,18 @@ async function handleCatalogCommand(options) {
   if (options.anime && !options.manga) type = 'anime';
   else if (options.manga && !options.anime) type = 'manga';
 
+  const filters = {
+    genre: options.genre || null,
+    audio: options.audio || (options.dub ? 'ita' : (options.sub ? 'subita' : null))
+  };
+
   if (options.json) {
     try {
       const catalog = await providerManager.getFullCatalog({
         type,
         source: options.source,
-        lang: options.lang
+        lang: options.lang,
+        filters
       });
       const payload = type === 'anime'
         ? (catalog.anime || [])
@@ -708,7 +716,8 @@ async function handleCatalogCommand(options) {
     const catalog = await providerManager.getFullCatalog({
       type,
       source: options.source,
-      lang: options.lang
+      lang: options.lang,
+      filters
     });
     spinner.stop();
 
@@ -1084,7 +1093,11 @@ async function handleAnimeFlow(query, options) {
 
     const sourceLabel = options.source ? ` [${options.source}]` : '';
     const spinner = (!options.getUrl && !options.json) ? ora(`Searching anime catalog for "${searchQuery}"${sourceLabel}...`).start() : null;
-    const results = await providerManager.searchAnime(searchQuery, selectedLang, options.source);
+    const filters = {
+      genre: options.genre || null,
+      audio: options.audio || (options.dub ? 'ita' : (options.sub ? 'subita' : null))
+    };
+    const results = await providerManager.searchAnime(searchQuery, selectedLang, options.source, filters);
     if (spinner) spinner.stop();
 
     if (options.json) {
@@ -1153,26 +1166,29 @@ async function handleAnimeFlow(query, options) {
   const animeKey = (selectedAnime.url || selectedAnime.title).toLowerCase().trim();
 
   // 4. Audio track selection
+  const audioOpt = (options.audio || '').toLowerCase().trim();
   let preferredAudio = 'subita';
-  if (options.dub) {
+  if (options.dub || audioOpt === 'dub' || audioOpt === 'ita') {
     preferredAudio = 'ita';
-  } else if (options.sub) {
+  } else if (options.sub || audioOpt === 'sub' || audioOpt === 'subita') {
     preferredAudio = 'subita';
-  } else if (selectedAnime.audio === 'ita') {
+  } else if (selectedAnime.audio === 'ita' || selectedAnime.audio === 'dub') {
     preferredAudio = 'ita';
   } else if (selectedAnime.audio === 'subita' || selectedAnime.audio === 'sub') {
     preferredAudio = 'subita';
   } else if (options.resumeItem && selectedAnime.audio) {
     preferredAudio = selectedAnime.audio;
   } else if (!options.getUrl && !options.info && !options.resumeItem && (selectedAnime.audio === 'both' || selectedAnime.title.includes('ITA/SUB ITA') || selectedAnime.title.includes('ITA / SUB ITA'))) {
+    const activeLangCode = (selectedAnime.language || (selectedLang && selectedLang !== 'all' ? selectedLang : 'it')).toUpperCase();
+    const activeFlag = getLanguageFlag(selectedAnime.language || (selectedLang && selectedLang !== 'all' ? selectedLang : 'it'));
     const audioAnswer = await inquirer.prompt([
       {
         type: 'list',
         name: 'audio',
-        message: 'Select audio track / language:',
+        message: `Select audio track / language [${activeLangCode}]:`,
         choices: [
-          { name: '🇯🇵 Japanese Audio with Italian Subtitles (SUB ITA)', value: 'subita' },
-          { name: '🇮🇹 Italian Dubbed Audio (ITA)', value: 'ita' }
+          { name: `💬 Subtitled (SUB ${activeLangCode})`, value: 'subita' },
+          { name: `${activeFlag} Dubbed (DUB ${activeLangCode})`, value: 'ita' }
         ]
       }
     ]);
@@ -1572,8 +1588,11 @@ async function handleMangaFlow(query, options) {
     const langLabel = (selectedLang || 'ALL').toUpperCase();
     const sourceLabel = options.source ? ` [${options.source}]` : '';
     const spinner = (!options.getUrl && !options.json) ? ora(`Searching manga for "${searchQuery}" [${langLabel}]${sourceLabel}...`).start() : null;
+    const filters = {
+      genre: options.genre || null
+    };
 
-    let results = await providerManager.searchManga(searchQuery, selectedLang, options.source);
+    let results = await providerManager.searchManga(searchQuery, selectedLang, options.source, filters);
     if (spinner) spinner.stop();
 
     if (options.json && (options.list || (!options.info && !options.chapter && !options.getUrl && !options.download))) {

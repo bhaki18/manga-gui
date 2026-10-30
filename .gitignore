@@ -18,3 +18,5 @@ src/
 installer/package.zip
 *.zip
 build-packages.sh
+publish-gh-pages.sh
+.gh-pages-tmp/

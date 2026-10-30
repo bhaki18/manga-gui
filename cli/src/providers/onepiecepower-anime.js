@@ -1,6 +1,7 @@
 const cheerio = require('cheerio');
 const BaseProvider = require('./base');
 const { fetchHtml } = require('../utils/http');
+const { getGenreConfig, normalizeAudio, matchesGenreText, matchesAudioFilter } = require('../utils/filters');
 
 const POPULAR_ANIME_KEYWORDS = [
   'one piece', 'naruto', 'bleach', 'dragon ball', 'attack on titan',
@@ -146,11 +147,17 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
   /**
    * Returns catalog with popular anime prioritized first
    */
-  async getCatalog(lang = null) {
+  async getCatalog(lang = null, filters = {}) {
     const all = await this.getAllAnime();
-    const filtered = (lang && lang !== 'all')
-      ? all.filter(a => a.language === lang)
-      : all;
+    const genreCfg = getGenreConfig(filters?.genre);
+    const audioKey = normalizeAudio(filters?.audio);
+
+    const filtered = all.filter(a => {
+      if (lang && lang !== 'all' && a.language !== lang) return false;
+      if (!matchesAudioFilter(a.audio, audioKey, a.title, lang, a.language)) return false;
+      if (genreCfg && !matchesGenreText(a.genres || 'Azione, Avventura, Shounen', filters.genre, a.title)) return false;
+      return true;
+    });
 
     const popular = [];
     const rest = [];
@@ -171,16 +178,20 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
   /**
    * Search anime by title or keywords
    */
-  async search(query, lang = null) {
+  async search(query, lang = null, filters = {}) {
     if (!query || !query.trim()) {
-      return this.getCatalog(lang);
+      return this.getCatalog(lang, filters);
     }
     const catalog = await this.getAllAnime();
+    const genreCfg = getGenreConfig(filters?.genre);
+    const audioKey = normalizeAudio(filters?.audio);
     const clean = (query || '').replace(/\s*\[[^\]]*\]\s*/g, ' ').toLowerCase().trim();
     const cleanNorm = clean.replace(/[^a-z0-9]/g, '');
 
     return catalog.filter(a => {
       if (lang && lang !== 'all' && a.language !== lang) return false;
+      if (!matchesAudioFilter(a.audio, audioKey, a.title, lang, a.language)) return false;
+      if (genreCfg && !matchesGenreText(a.genres || 'Azione, Avventura, Shounen', filters.genre, a.title)) return false;
       if (!clean) return true;
       const titleLower = a.title.toLowerCase();
       if (titleLower.includes(clean)) return true;

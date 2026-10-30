@@ -141,13 +141,13 @@ public partial class MediaItem : ObservableObject
                 return $"{label}: {LastItem} ({Count} {unit})";
             }
 
+            var langBadge = !string.IsNullOrWhiteSpace(Language) ? Language.ToUpperInvariant() : "IT";
             return Audio?.ToLower() switch
             {
-                "both" => "Sub | Dub",
-                "ita" => "Dubbed (ITA)",
-                "subita" => "Subtitled (SUB ITA)",
-                "sub" => "Subtitled",
-                _ => Type.ToLower() == "manga" ? "Manga" : "Sub | Dub"
+                "both" => $"Sub | Dub ({langBadge})",
+                "ita" or "dub" => $"Dubbed (DUB {langBadge})",
+                "subita" or "sub" => $"Subtitled (SUB {langBadge})",
+                _ => Type.ToLower() == "manga" ? $"Manga ({langBadge})" : $"Sub | Dub ({langBadge})"
             };
         }
     }
@@ -156,11 +156,10 @@ public partial class MediaItem : ObservableObject
 
     public string AudioBadge => IsDownloaded ? "OFFLINE" : Audio?.ToLower() switch
     {
-        "ita" => "ITA",
-        "subita" => "SUB ITA",
-        "sub" => "SUB ITA",
-        "both" => "SUB | DUB",
-        _ => Type.ToUpper()
+        "ita" or "dub" => !string.IsNullOrWhiteSpace(Language) ? $"DUB {Language.ToUpperInvariant()}" : "DUB",
+        "subita" or "sub" => !string.IsNullOrWhiteSpace(Language) ? $"SUB {Language.ToUpperInvariant()}" : "SUB",
+        "both" => !string.IsNullOrWhiteSpace(Language) ? $"SUB | DUB ({Language.ToUpperInvariant()})" : "SUB | DUB",
+        _ => !string.IsNullOrWhiteSpace(Language) ? $"{Type.ToUpper()} • {Language.ToUpperInvariant()}" : Type.ToUpper()
     };
 
     public string SourceLabel => !string.IsNullOrWhiteSpace(SourceName) ? SourceName : Source;

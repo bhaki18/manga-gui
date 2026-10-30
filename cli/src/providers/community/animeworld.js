@@ -1,6 +1,7 @@
 const path = require('path');
 const os = require('os');
 const { execFile } = require('child_process');
+const { getGenreConfig, normalizeAudio, matchesAudioFilter } = require('../../utils/filters');
 
 /**
  * Anime Provider for AnimeWorld (animeworld.ac)
@@ -56,16 +57,26 @@ function createAnimeWorldProvider({ BaseAnimeProvider, cheerio, fetchHtml, getCu
      * 1. Cerca anime nel catalogo AnimeWorld
      * @param {string} query Titolo dell'anime
      * @param {string|null} lang
+     * @param {{ genre?: string, audio?: string }} filters
      */
-    async search(query, lang = null) {
+    async search(query, lang = null, filters = {}) {
+      const cleanLang = lang ? String(lang).toLowerCase().trim() : 'all';
+      if (cleanLang && cleanLang !== 'all' && cleanLang !== 'it') {
+        return [];
+      }
       if (!query || !query.trim()) {
-        return this.getCatalog();
+        return this.getCatalog(lang, filters);
       }
       try {
+        const genreCfg = getGenreConfig(filters?.genre);
+        const audioKey = normalizeAudio(filters?.audio);
+        const genreParam = genreCfg && genreCfg.awId ? `&genre=${genreCfg.awId}` : '';
+        const dubParam = (audioKey === 'dub' || audioKey === 'ita') ? '&dub=1' : ((audioKey === 'sub' || audioKey === 'subita') ? '&dub=0' : '');
+
         // Strip trailing audio badges like [SUB ITA] or [ITA] if present, but preserve (ITA)
         const cleaned = query.replace(/\s*\[[^\]]*\]\s*/g, ' ').trim();
         const cleanQuery = encodeURIComponent(cleaned);
-        const searchUrl = `${this.baseUrl}/filter?keyword=${cleanQuery}`;
+        const searchUrl = `${this.baseUrl}/filter?keyword=${cleanQuery}${genreParam}${dubParam}`;
         const html = await this.fetchHtml(searchUrl);
         const results = [];
         const seenUrls = new Set();
@@ -75,12 +86,12 @@ function createAnimeWorldProvider({ BaseAnimeProvider, cheerio, fetchHtml, getCu
         if (results.length === 0 && cleaned.includes('(')) {
           const baseQuery = cleaned.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
           if (baseQuery.length >= 2) {
-            const fallbackHtml = await this.fetchHtml(`${this.baseUrl}/filter?keyword=${encodeURIComponent(baseQuery)}`);
+            const fallbackHtml = await this.fetchHtml(`${this.baseUrl}/filter?keyword=${encodeURIComponent(baseQuery)}${genreParam}${dubParam}`);
             this._parseItemsFromHtml(fallbackHtml, results, seenUrls);
           }
         }
 
-        return results;
+        return results.filter(item => matchesAudioFilter(item.audio, audioKey, item.title, cleanLang, item.language));
       } catch (err) {
         return [];
       }
@@ -89,8 +100,17 @@ function createAnimeWorldProvider({ BaseAnimeProvider, cheerio, fetchHtml, getCu
     /**
      * Recupera il catalogo AnimeWorld (Più popolari + Ultime uscite)
      */
-    async getCatalog() {
-      if (this.catalogCache && this.catalogCache.length > 0) {
+    async getCatalog(lang = null, filters = {}) {
+      const cleanLang = lang ? String(lang).toLowerCase().trim() : 'all';
+      if (cleanLang && cleanLang !== 'all' && cleanLang !== 'it') {
+        return [];
+      }
+
+      const genreCfg = getGenreConfig(filters?.genre);
+      const audioKey = normalizeAudio(filters?.audio);
+      const hasFilters = Boolean(genreCfg || audioKey !== 'all');
+
+      if (!hasFilters && this.catalogCache && this.catalogCache.length > 0) {
         return this.catalogCache;
       }
 
@@ -98,6 +118,19 @@ function createAnimeWorldProvider({ BaseAnimeProvider, cheerio, fetchHtml, getCu
       const seenUrls = new Set();
 
       try {
+        if (hasFilters) {
+          const genreParam = genreCfg && genreCfg.awId ? `&genre=${genreCfg.awId}` : '';
+          const dubParam = (audioKey === 'dub' || audioKey === 'ita') ? '&dub=1' : ((audioKey === 'sub' || audioKey === 'subita') ? '&dub=0' : '');
+          const [popFilterHtml, latestFilterHtml] = await Promise.all([
+            this.fetchHtml(`${this.baseUrl}/filter?sort=6${genreParam}${dubParam}`).catch(() => ''),
+            this.fetchHtml(`${this.baseUrl}/filter?sort=0${genreParam}${dubParam}`).catch(() => '')
+          ]);
+
+          if (popFilterHtml) this._parseItemsFromHtml(popFilterHtml, results, seenUrls);
+          if (latestFilterHtml) this._parseItemsFromHtml(latestFilterHtml, results, seenUrls);
+          return results.filter(item => matchesAudioFilter(item.audio, audioKey, item.title, cleanLang, item.language));
+        }
+
         const [popularHtml, homeHtml] = await Promise.all([
           this.fetchHtml(`${this.baseUrl}/filter?sort=6`).catch(() => ''),
           this.fetchHtml(`${this.baseUrl}/`).catch(() => '')

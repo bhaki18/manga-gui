@@ -15,10 +15,91 @@ public class MangaCliService
 {
     private readonly string _cliScriptPath;
     private static readonly string _historyFile;
+    private static readonly string _searchHistoryFile;
+    private const int MaxSearchHistoryItems = 5;
 
     static MangaCliService()
     {
         _historyFile = ResolveHistoryFilePath();
+        _searchHistoryFile = ResolveSearchHistoryFilePath();
+    }
+
+    public static string ResolveSearchHistoryFilePath()
+    {
+        var dir = Path.GetDirectoryName(ResolveHistoryFilePath());
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+            return Path.Combine(dir, "search-history.json");
+        }
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var fallbackDir = Path.Combine(home, ".local", "state", "manga-cli");
+        Directory.CreateDirectory(fallbackDir);
+        return Path.Combine(fallbackDir, "search-history.json");
+    }
+
+    public async Task<List<string>> GetSearchHistoryAsync()
+    {
+        try
+        {
+            if (!File.Exists(_searchHistoryFile)) return new List<string>();
+            var json = await File.ReadAllTextAsync(_searchHistoryFile);
+            var list = JsonSerializer.Deserialize<List<string>>(json);
+            return list?.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(MaxSearchHistoryItems).ToList()
+                   ?? new List<string>();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    public async Task<List<string>> AddSearchHistoryAsync(string query)
+    {
+        var clean = query?.Trim() ?? "";
+        var list = await GetSearchHistoryAsync();
+        if (string.IsNullOrWhiteSpace(clean)) return list;
+
+        list.RemoveAll(s => string.Equals(s, clean, StringComparison.OrdinalIgnoreCase));
+        list.Insert(0, clean);
+        if (list.Count > MaxSearchHistoryItems)
+        {
+            list = list.Take(MaxSearchHistoryItems).ToList();
+        }
+
+        try
+        {
+            var json = JsonSerializer.Serialize(list);
+            await File.WriteAllTextAsync(_searchHistoryFile, json);
+        }
+        catch {}
+
+        return list;
+    }
+
+    public async Task<List<string>> RemoveSearchHistoryItemAsync(string query)
+    {
+        var clean = query?.Trim() ?? "";
+        var list = await GetSearchHistoryAsync();
+        list.RemoveAll(s => string.Equals(s, clean, StringComparison.OrdinalIgnoreCase));
+
+        try
+        {
+            var json = JsonSerializer.Serialize(list);
+            await File.WriteAllTextAsync(_searchHistoryFile, json);
+        }
+        catch {}
+
+        return list;
+    }
+
+    public async Task ClearSearchHistoryAsync()
+    {
+        try
+        {
+            await File.WriteAllTextAsync(_searchHistoryFile, "[]");
+        }
+        catch {}
     }
 
     public static string ResolveHistoryFilePath()
@@ -150,8 +231,10 @@ public class MangaCliService
         var s = raw.ToLowerInvariant().Trim();
         if (s.Contains("mangadex")) return "mangadex";
         if (s.Contains("mangapill")) return "mangapill";
+        if (s.Contains("mangaworld")) return "mangaworld";
         if (s.Contains("animeworld")) return "animeworld";
         if (s.Contains("animesaturn")) return "animesaturn";
+        if (s.Contains("animeunity")) return "animeunity";
         if (s.Contains("onepiecepower") || s.Contains("one piece power") || s.Contains("oppower"))
             return s.Contains("anime") ? "onepiecepower-anime" : "onepiecepower";
         return s.Replace(" ", "");
@@ -164,11 +247,89 @@ public class MangaCliService
         {
             "mangadex" => "MangaDex",
             "mangapill" => "Mangapill",
+            "mangaworld" => "MangaWorld",
             "animeworld" => "AnimeWorld",
+            "animesaturn" => "AnimeSaturn",
+            "animeunity" => "AnimeUnity",
             "onepiecepower-anime" => "One Piece Power Anime",
             "onepiecepower" => "One Piece Power",
             _ => !string.IsNullOrWhiteSpace(source) ? source : "Unknown"
         };
+    }
+
+    public static string ResolveLanguageCode(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "all";
+        var s = raw.Trim().ToLowerInvariant();
+        if (s == "all" || s.Contains("all languages") || s.Contains("tutte le lingue")) return "all";
+
+        // Match explicit code in parentheses, e.g. "Italiano (IT)" -> "it", "Português (PT-BR)" -> "pt-br"
+        var m = Regex.Match(s, @"\(([a-z\-]+)\)\s*$");
+        if (m.Success)
+        {
+            return m.Groups[1].Value.Trim();
+        }
+
+        if (s.Contains("italiano") || s.Contains("italian") || s == "it") return "it";
+        if (s.Contains("english") || s.Contains("inglese") || s == "en") return "en";
+        if (s.Contains("español") || s.Contains("spanish") || s.Contains("spagnolo") || s == "es") return "es";
+        if (s.Contains("français") || s.Contains("french") || s.Contains("francese") || s == "fr") return "fr";
+        if (s.Contains("deutsch") || s.Contains("german") || s.Contains("tedesco") || s == "de") return "de";
+        if (s.Contains("portugu") || s == "pt" || s == "pt-br") return "pt-br";
+        if (s.Contains("русский") || s.Contains("russian") || s.Contains("russo") || s == "ru") return "ru";
+        if (s.Contains("日本語") || s.Contains("japanese") || s.Contains("giapponese") || s == "ja") return "ja";
+        if (s.Contains("العربية") || s.Contains("arabic") || s == "ar") return "ar";
+        if (s.Contains("polski") || s.Contains("polish") || s == "pl") return "pl";
+        if (s.Contains("türkçe") || s.Contains("turkish") || s == "tr") return "tr";
+        if (s.Contains("indonesian") || s == "id") return "id";
+        if (s.Contains("việt") || s.Contains("vietnamese") || s == "vi") return "vi";
+        if (s.Contains("한국어") || s.Contains("korean") || s == "ko") return "ko";
+        if (s.Contains("中文") || s.Contains("chinese") || s == "zh") return "zh";
+
+        return s;
+    }
+
+    public static string ResolveGenreCode(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "all";
+        var s = raw.Trim().ToLowerInvariant();
+        if (s == "all" || s.Contains("all genres") || s.Contains("tutti i generi")) return "all";
+
+        if (s.Contains("shoun") || s.Contains("shon")) return "shounen";
+        if (s.Contains("seinen")) return "seinen";
+        if (s.Contains("shoujo") || s.Contains("shojo")) return "shoujo";
+        if (s.Contains("isekai")) return "isekai";
+        if (s.Contains("action") || s.Contains("azion")) return "action";
+        if (s.Contains("adventur") || s.Contains("avventur")) return "adventure";
+        if (s.Contains("fantasy")) return "fantasy";
+        if (s.Contains("comed") || s.Contains("commed")) return "comedy";
+        if (s.Contains("romanc") || s.Contains("romant") || s.Contains("sentiment")) return "romance";
+        if (s.Contains("drama") || s.Contains("dramm")) return "drama";
+        if (s.Contains("sci-fi") || s.Contains("scifi") || s.Contains("fantascienza")) return "scifi";
+        if (s.Contains("horror")) return "horror";
+        if (s.Contains("myster") || s.Contains("mister")) return "mystery";
+        if (s.Contains("supernat") || s.Contains("soprannat") || s.Contains("sovrannat")) return "supernatural";
+        if (s.Contains("slice")) return "sliceoflife";
+        if (s.Contains("sport")) return "sports";
+        if (s.Contains("psycholog") || s.Contains("psicolog")) return "psychological";
+        if (s.Contains("thriller")) return "thriller";
+        if (s.Contains("ecchi")) return "ecchi";
+        if (s.Contains("mecha")) return "mecha";
+        if (s.Contains("martial") || s.Contains("marzial")) return "martialarts";
+        if (s.Contains("school") || s.Contains("scolast")) return "school";
+        if (s.Contains("histor") || s.Contains("storic")) return "historical";
+
+        return s;
+    }
+
+    public static string ResolveAudioCode(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "all";
+        var s = raw.Trim().ToLowerInvariant();
+        if (s == "all" || s.Contains("all audio") || (s.Contains("sub") && s.Contains("dub"))) return "all";
+        if (s == "dub" || s == "ita" || s.Contains("dub") || s.Contains("doppiat") || s.Contains("doblado") || s.Contains("doubl") || s.Contains("synchron")) return "dub";
+        if (s == "sub" || s == "subita" || s.Contains("sub") || s.Contains("sottotitol") || s.Contains("sous-titr") || s.Contains("untertitel") || s.Contains("legendado")) return "sub";
+        return "all";
     }
 
     private static List<MediaItem> ParseJsonMediaItems(string output, string type)
@@ -262,10 +423,16 @@ public class MangaCliService
             return "https://mangapill.com/";
         if (p0.Contains("mangadex") || provider.Contains("mangadex"))
             return "https://mangadex.org/";
+        if (p0.Contains("mangaworld") || provider.Contains("mangaworld"))
+            return "https://www.mangaworld.ac/";
         if (p0.Contains("onepiecepower") || provider.Contains("onepiecepower"))
             return "https://onepiecepower.com/";
         if (p0.Contains("animeworld") || provider.Contains("animeworld"))
             return "https://www.animeworld.ac/";
+        if (p0.Contains("saturncdn") || p0.Contains("streampeaker") || p0.Contains("animesaturn") || provider.Contains("animesaturn"))
+            return "https://play.saturncdn.net/";
+        if (p0.Contains("vixcloud") || p0.Contains("vix-content") || p0.Contains("animeunity") || provider.Contains("animeunity"))
+            return "https://vixcloud.cc/";
         try
         {
             var uri = new Uri(pages[0]);
@@ -356,7 +523,7 @@ public class MangaCliService
         return dir;
     }
 
-    public async Task<(bool success, string message, string? destination)> DownloadMediaAsync(MediaItem item, int number, Action<string>? onProgress = null)
+    public async Task<(bool success, string message, string? destination)> DownloadMediaAsync(MediaItem item, int number, Action<string>? onProgress = null, string? preferredLang = null, string? preferredAudio = null)
     {
         try
         {
@@ -368,16 +535,20 @@ public class MangaCliService
             var targetDir = Path.Combine(baseDir, safeTitle);
             Directory.CreateDirectory(targetDir);
 
-            var langArg = !string.IsNullOrWhiteSpace(item.Language) && item.Language.ToLower() != "it" 
-                ? $"-l {item.Language}" 
-                : "-l all";
+            var prefCode = ResolveLanguageCode(preferredLang);
+            var itemCode = ResolveLanguageCode(item.Language);
+            var effCode = prefCode != "all" ? prefCode : (!string.IsNullOrWhiteSpace(itemCode) ? itemCode : "all");
+            var langArg = $"-l {effCode}";
+            var audioCode = ResolveAudioCode(preferredAudio);
+            if (audioCode == "all") audioCode = ResolveAudioCode(item.Audio);
+            var audioArg = !isManga && audioCode != "all" ? $"--audio {audioCode}" : "";
             var src = NormalizeProviderSource(item.Source);
             var srcArg = !string.IsNullOrWhiteSpace(src) && src != "all" && src != "downloaded" ? $"-s \"{src}\"" : "";
             var urlArg = !string.IsNullOrWhiteSpace(item.Url) && item.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                 ? $"--url \"{EscapeArg(item.Url)}\"" : "";
             var typeArg = isManga
                 ? $"-m {srcArg} {urlArg} {langArg} -C {number} -d \"{targetDir}\""
-                : $"-a {srcArg} {urlArg} -e {number} -d \"{targetDir}\"";
+                : $"-a {srcArg} {urlArg} {langArg} {audioArg} -e {number} -d \"{targetDir}\"";
             var output = await RunCommandWithProgressAsync($"\"{EscapeArg(cleanTitle)}\" {typeArg}", onProgress);
             
             var match = Regex.Match(output, @"Destination:\s*([^\r\n]+)", RegexOptions.IgnoreCase);
@@ -565,17 +736,24 @@ public class MangaCliService
         return $"{mb:F1} MB";
     }
 
-    public async Task<List<MediaItem>> GetAnimeCatalogAsync(string? source = null)
+    public async Task<List<MediaItem>> GetAnimeCatalogAsync(string? source = null, string? lang = null, string? genre = null, string? audio = null)
     {
         try
         {
             var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
                 ? $"-s \"{EscapeArg(source)}\"" : "";
-            var output = await RunCommandAsync($"--catalog-anime {srcArg} --json");
+            var langCode = ResolveLanguageCode(lang);
+            var langArg = !string.IsNullOrWhiteSpace(langCode) && langCode != "all" ? $"-l {langCode}" : "";
+            var genreCode = ResolveGenreCode(genre);
+            var genreArg = !string.IsNullOrWhiteSpace(genreCode) && genreCode != "all" ? $"--genre {genreCode}" : "";
+            var audioCode = ResolveAudioCode(audio);
+            var audioArg = !string.IsNullOrWhiteSpace(audioCode) && audioCode != "all" ? $"--audio {audioCode}" : "";
+
+            var output = await RunCommandAsync($"--catalog-anime {srcArg} {langArg} {genreArg} {audioArg} --json");
             var items = ParseJsonMediaItems(output, "anime");
-            if (items.Count == 0)
+            if (items.Count == 0 && !output.TrimStart().StartsWith("["))
             {
-                var fallbackOutput = await RunCommandAsync($"--catalog-anime {srcArg} --list");
+                var fallbackOutput = await RunCommandAsync($"--catalog-anime {srcArg} {langArg} {genreArg} {audioArg} --list");
                 items = ParseCatalogOutput(fallbackOutput, "anime");
             }
 
@@ -590,17 +768,22 @@ public class MangaCliService
         }
     }
 
-    public async Task<List<MediaItem>> GetMangaCatalogAsync(string? source = null)
+    public async Task<List<MediaItem>> GetMangaCatalogAsync(string? source = null, string? lang = null, string? genre = null)
     {
         try
         {
             var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
                 ? $"-s \"{EscapeArg(source)}\"" : "";
-            var output = await RunCommandAsync($"--catalog-manga {srcArg} --json");
+            var langCode = ResolveLanguageCode(lang);
+            var langArg = !string.IsNullOrWhiteSpace(langCode) && langCode != "all" ? $"-l {langCode}" : "";
+            var genreCode = ResolveGenreCode(genre);
+            var genreArg = !string.IsNullOrWhiteSpace(genreCode) && genreCode != "all" ? $"--genre {genreCode}" : "";
+
+            var output = await RunCommandAsync($"--catalog-manga {srcArg} {langArg} {genreArg} --json");
             var items = ParseJsonMediaItems(output, "manga");
-            if (items.Count == 0)
+            if (items.Count == 0 && !output.TrimStart().StartsWith("["))
             {
-                var fallbackOutput = await RunCommandAsync($"--catalog-manga {srcArg} --list");
+                var fallbackOutput = await RunCommandAsync($"--catalog-manga {srcArg} {langArg} {genreArg} --list");
                 items = ParseCatalogOutput(fallbackOutput, "manga");
             }
 
@@ -660,13 +843,20 @@ public class MangaCliService
         return null;
     }
 
-    public async Task<List<MediaItem>> SearchAnimeAsync(string query, string? source = null)
+    public async Task<List<MediaItem>> SearchAnimeAsync(string query, string? source = null, string? lang = null, string? genre = null, string? audio = null)
     {
         try
         {
             var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
                 ? $"-s \"{EscapeArg(source)}\"" : "";
-            var output = await RunCommandAsync($"\"{EscapeArg(query)}\" -a {srcArg} --list --json");
+            var langCode = ResolveLanguageCode(lang);
+            var langArg = !string.IsNullOrWhiteSpace(langCode) && langCode != "all" ? $"-l {langCode}" : "";
+            var genreCode = ResolveGenreCode(genre);
+            var genreArg = !string.IsNullOrWhiteSpace(genreCode) && genreCode != "all" ? $"--genre {genreCode}" : "";
+            var audioCode = ResolveAudioCode(audio);
+            var audioArg = !string.IsNullOrWhiteSpace(audioCode) && audioCode != "all" ? $"--audio {audioCode}" : "";
+
+            var output = await RunCommandAsync($"\"{EscapeArg(query)}\" -a {srcArg} {langArg} {genreArg} {audioArg} --list --json");
             var items = ParseJsonMediaItems(output, "anime");
             if (items.Count == 0 && !output.TrimStart().StartsWith("["))
             {
@@ -677,7 +867,7 @@ public class MangaCliService
                 var segmented = GetSegmentedQuery(query);
                 if (!string.IsNullOrWhiteSpace(segmented))
                 {
-                    var fallbackOutput = await RunCommandAsync($"\"{EscapeArg(segmented)}\" -a {srcArg} --list --json");
+                    var fallbackOutput = await RunCommandAsync($"\"{EscapeArg(segmented)}\" -a {srcArg} {langArg} {genreArg} {audioArg} --list --json");
                     var fallbackItems = ParseJsonMediaItems(fallbackOutput, "anime");
                     if (fallbackItems.Count == 0 && !fallbackOutput.TrimStart().StartsWith("["))
                     {
@@ -698,14 +888,18 @@ public class MangaCliService
         }
     }
 
-    public async Task<List<MediaItem>> SearchMangaAsync(string query, string? source = null, string? lang = null)
+    public async Task<List<MediaItem>> SearchMangaAsync(string query, string? source = null, string? lang = null, string? genre = null)
     {
         try
         {
             var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
                 ? $"-s \"{EscapeArg(source)}\"" : "";
-            var langArg = !string.IsNullOrWhiteSpace(lang) ? $"-l {lang}" : "-l all";
-            var output = await RunCommandAsync($"\"{EscapeArg(query)}\" -m {srcArg} {langArg} --list --json");
+            var langCode = ResolveLanguageCode(lang);
+            var langArg = !string.IsNullOrWhiteSpace(langCode) ? $"-l {langCode}" : "-l all";
+            var genreCode = ResolveGenreCode(genre);
+            var genreArg = !string.IsNullOrWhiteSpace(genreCode) && genreCode != "all" ? $"--genre {genreCode}" : "";
+
+            var output = await RunCommandAsync($"\"{EscapeArg(query)}\" -m {srcArg} {langArg} {genreArg} --list --json");
             var items = ParseJsonMediaItems(output, "manga");
             if (items.Count == 0 && !output.TrimStart().StartsWith("["))
             {
@@ -716,7 +910,7 @@ public class MangaCliService
                 var segmented = GetSegmentedQuery(query);
                 if (!string.IsNullOrWhiteSpace(segmented))
                 {
-                    var fallbackOutput = await RunCommandAsync($"\"{EscapeArg(segmented)}\" -m {srcArg} {langArg} --list --json");
+                    var fallbackOutput = await RunCommandAsync($"\"{EscapeArg(segmented)}\" -m {srcArg} {langArg} {genreArg} --list --json");
                     var fallbackItems = ParseJsonMediaItems(fallbackOutput, "manga");
                     if (fallbackItems.Count == 0 && !fallbackOutput.TrimStart().StartsWith("["))
                     {
@@ -737,7 +931,7 @@ public class MangaCliService
         }
     }
 
-    public async Task<int> GetMediaDetailsAsync(MediaItem item)
+    public async Task<int> GetMediaDetailsAsync(MediaItem item, string? preferredLang = null)
     {
         try
         {
@@ -748,9 +942,10 @@ public class MangaCliService
                 ? $"-s \"{src}\"" : "";
             var urlArg = !string.IsNullOrWhiteSpace(item.Url) && item.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                 ? $"--url \"{EscapeArg(item.Url)}\"" : "";
-            var langArg = isManga
-                ? (!string.IsNullOrWhiteSpace(item.Language) && item.Language.ToLower() != "it" ? $"-l {item.Language}" : "-l all")
-                : "";
+            var prefCode = ResolveLanguageCode(preferredLang);
+            var itemCode = ResolveLanguageCode(item.Language);
+            var effCode = prefCode != "all" ? prefCode : (!string.IsNullOrWhiteSpace(itemCode) ? itemCode : "all");
+            var langArg = isManga ? $"-l {effCode}" : "";
             var typeArg = isManga ? $"-m {srcArg} {urlArg} {langArg}" : $"-a {srcArg} {urlArg}";
             var output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" {typeArg} -i");
             var m = Regex.Match(output, @"Total\s+(?:episodes|chapters):\s*(\d+)", RegexOptions.IgnoreCase);
@@ -766,7 +961,7 @@ public class MangaCliService
         }
     }
 
-    public async Task<(bool success, string message)> PlayStreamAsync(MediaItem item, int episode)
+    public async Task<(bool success, string message)> PlayStreamAsync(MediaItem item, int episode, string? preferredAudio = null)
     {
         try
         {
@@ -776,8 +971,11 @@ public class MangaCliService
                 ? $"-s \"{src}\"" : "";
             var urlArg = !string.IsNullOrWhiteSpace(item.Url) && item.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                 ? $"--url \"{EscapeArg(item.Url)}\"" : "";
+            var audioCode = ResolveAudioCode(preferredAudio);
+            if (audioCode == "all") audioCode = ResolveAudioCode(item.Audio);
+            var audioArg = audioCode != "all" ? $"--audio {audioCode}" : "";
 
-            var output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" -a {srcArg} {urlArg} -e {episode} --get-url");
+            var output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" -a {srcArg} {urlArg} {audioArg} -e {episode} --get-url");
             var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             var streamUrl = lines.FirstOrDefault(l => l.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
                                                       l.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
@@ -785,7 +983,7 @@ public class MangaCliService
             // Fallback across all anime providers if primary source/URL failed
             if (string.IsNullOrWhiteSpace(streamUrl))
             {
-                output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" -a -e {episode} --get-url");
+                output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" -a {audioArg} -e {episode} --get-url");
                 lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
                 streamUrl = lines.FirstOrDefault(l => l.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
                                                       l.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
@@ -828,7 +1026,7 @@ public class MangaCliService
         }
     }
 
-    public async Task<(bool success, string message)> ReadMangaAsync(MediaItem item, int chapter)
+    public async Task<(bool success, string message)> ReadMangaAsync(MediaItem item, int chapter, string? preferredLang = null)
     {
         try
         {
@@ -866,9 +1064,10 @@ public class MangaCliService
                 ? $"-s \"{src}\"" : "";
             var urlArg = !string.IsNullOrWhiteSpace(item.Url) && item.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
                 ? $"--url \"{EscapeArg(item.Url)}\"" : "";
-            var langArg = !string.IsNullOrWhiteSpace(item.Language) && item.Language.ToLower() != "it" 
-                ? $"-l {item.Language}" 
-                : "-l all";
+            var prefCode = ResolveLanguageCode(preferredLang);
+            var itemCode = ResolveLanguageCode(item.Language);
+            var effCode = prefCode != "all" ? prefCode : (!string.IsNullOrWhiteSpace(itemCode) ? itemCode : "all");
+            var langArg = $"-l {effCode}";
 
             var output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" -m {srcArg} {urlArg} {langArg} -C {chapter} --get-url");
             var pages = ExtractPagesFromOutput(output);
