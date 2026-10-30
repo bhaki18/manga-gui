@@ -83,6 +83,19 @@ class Program
             }
 
             // 6. Registra disinstallazione nel Registro di Windows
+            var displayVersion = "1.0.0-2";
+            try
+            {
+                var verFile = Path.Combine(installDir, "version.json");
+                if (File.Exists(verFile))
+                {
+                    var raw = File.ReadAllText(verFile);
+                    var m = System.Text.RegularExpressions.Regex.Match(raw, "\"version\"\\s*:\\s*\"([^\"]+)\"");
+                    if (m.Success) displayVersion = m.Groups[1].Value;
+                }
+            }
+            catch { }
+
             try
             {
                 using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\MangaGui");
@@ -90,7 +103,7 @@ class Program
                 {
                     key.SetValue("DisplayName", "Manga GUI");
                     key.SetValue("DisplayIcon", iconPath);
-                    key.SetValue("DisplayVersion", "1.0.0");
+                    key.SetValue("DisplayVersion", displayVersion);
                     key.SetValue("Publisher", "Manga GUI");
                     key.SetValue("InstallLocation", installDir);
                     key.SetValue("UninstallString", $"cmd /c rmdir /s /q \"{installDir}\" & del /f /q \"%USERPROFILE%\\Desktop\\Manga GUI.lnk\"");
@@ -98,14 +111,18 @@ class Program
             }
             catch { }
 
-            // 7. Notifica di successo
-            var msg = "Installazione completata con successo!\n\n" +
-                      "• Dipendenze di sistema (Visual C++, Node, MPV, cURL): Verificate e pronte\n" +
-                      "• Icona Manga GUI creata sul Desktop\n" +
-                      "• Collegamento aggiunto al Menu Start\n\n" +
-                      "Clicca OK per avviare Manga GUI.";
+            // 7. Notifica di successo (salta se invocato con --silent dall'updater)
+            bool isSilent = args != null && args.Any(a => a.Equals("--silent", StringComparison.OrdinalIgnoreCase) || a.Equals("/S", StringComparison.OrdinalIgnoreCase));
+            if (!isSilent)
+            {
+                var msg = $"Installazione di Manga GUI v{displayVersion} completata con successo!\n\n" +
+                          "• Dipendenze di sistema (Visual C++, Node, MPV, cURL): Verificate e pronte\n" +
+                          "• Icona Manga GUI creata sul Desktop\n" +
+                          "• Collegamento aggiunto al Menu Start\n\n" +
+                          "Clicca OK per avviare Manga GUI.";
 
-            MessageBoxW(IntPtr.Zero, msg, "Manga GUI Setup", MB_OK | MB_ICONINFORMATION);
+                MessageBoxW(IntPtr.Zero, msg, "Manga GUI Setup", MB_OK | MB_ICONINFORMATION);
+            }
 
             // 8. Avvia Manga GUI
             if (File.Exists(targetExe))

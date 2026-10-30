@@ -32,7 +32,7 @@ sealed class Program
             }
             if (first == "--version" || first == "-v")
             {
-                Console.WriteLine("manga-gui v1.0.0");
+                Console.WriteLine($"manga-gui v{MangaGui.Services.UpdateService.GetInstalledVersion()}");
                 return;
             }
         }

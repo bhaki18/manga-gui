@@ -710,11 +710,120 @@
             </Border>
         </Border>
 
+        <!-- AUTO-UPDATER MODAL DIALOG -->
+        <Border Grid.Row="0" Grid.RowSpan="3"
+                Background="#B8000000"
+                IsVisible="{Binding IsUpdateDialogVisible}"
+                ZIndex="110">
+            <Border Background="#18191E"
+                    BorderBrush="#FF640A"
+                    BorderThickness="1.5"
+                    CornerRadius="10"
+                    Padding="30"
+                    MaxWidth="540"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <StackPanel Spacing="16">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="🚀" FontSize="24" VerticalAlignment="Center"/>
+                        <TextBlock Text="Nuovo Aggiornamento Disponibile!"
+                                   FontWeight="Black"
+                                   FontSize="19"
+                                   Foreground="#FFFFFF"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <Border Background="#111216"
+                            BorderBrush="#2C2D35"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="14,10">
+                        <Grid ColumnDefinitions="*,Auto,*">
+                            <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                <TextBlock Text="VERSIONE INSTALLATA" FontSize="10" FontWeight="Bold" Foreground="#808080" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding InstalledVersionText}" FontSize="15" FontWeight="Bold" Foreground="#C0C0C0" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Text="➔" FontSize="18" Foreground="#FF640A" VerticalAlignment="Center" Margin="18,0"/>
+                            <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                <TextBlock Text="NUOVA VERSIONE ONLINE" FontSize="10" FontWeight="Bold" Foreground="#FF640A" HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding RemoteVersionText}" FontSize="15" FontWeight="Black" Foreground="#4ADE80" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Text="È disponibile una versione più recente di Manga GUI. Vuoi scaricare, compilare e avviare l'aggiornamento adesso? Tutte le dipendenze necessarie (git, nodejs, npm, dotnet, mpv, curl) verranno verificate e installate automaticamente se mancanti."
+                               FontSize="12.5"
+                               Foreground="#D0D0D0"
+                               TextWrapping="Wrap"
+                               LineHeight="19"/>
+
+                    <Border Background="#121318"
+                            BorderBrush="#262830"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="12,10"
+                            IsVisible="{Binding HasUpdateNotes}">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="📋 Novità di questa versione:" FontSize="11" FontWeight="Bold" Foreground="#FF640A"/>
+                            <TextBlock Text="{Binding UpdateNotesText}" FontSize="12" Foreground="#B8B8C0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#0D0E12"
+                            BorderBrush="#2C2D35"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="12,10"
+                            IsVisible="{Binding HasUpdateProgress}">
+                        <TextBlock Text="{Binding UpdateProgressLog}"
+                                   FontSize="11.5"
+                                   FontFamily="Monospace"
+                                   Foreground="#4ADE80"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12" Margin="0,6,0,0">
+                        <Button Command="{Binding DismissUpdateDialogCommand}"
+                                IsEnabled="{Binding !IsUpdating}"
+                                Content="Più tardi"
+                                Padding="16,10"
+                                Background="#2A2B32"
+                                Foreground="#D0D0D0"
+                                FontWeight="SemiBold"
+                                CornerRadius="4"
+                                Cursor="Hand"/>
+
+                        <Button Command="{Binding StartUpdateCommand}"
+                                IsEnabled="{Binding !IsUpdating}"
+                                Content="{Binding UpdateConfirmButtonText}"
+                                Padding="18,10"
+                                Background="#FF640A"
+                                Foreground="#000000"
+                                FontWeight="Black"
+                                CornerRadius="4"
+                                Cursor="Hand"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+
         <!-- CRUNCHYROLL BOTTOM STATUS BAR -->
         <Border Grid.Row="2" Background="#0A0A0C" BorderBrush="#1C1C1E" BorderThickness="0,1,0,0" Padding="30,8">
             <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0" Text="{Binding StatusText}" Foreground="#808080" FontSize="12" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" Text="manga-gui v1.0.0" Foreground="#505050" FontSize="12" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <Button Command="{Binding CheckUpdatesCommand}"
+                            Content="🔄 Check Updates"
+                            Background="#16171C"
+                            BorderBrush="#2C2D35"
+                            BorderThickness="1"
+                            Foreground="#B0B0B0"
+                            FontSize="11"
+                            Padding="10,4"
+                            CornerRadius="4"
+                            Cursor="Hand"/>
+                    <TextBlock Text="{Binding AppVersionText}" Foreground="#606060" FontSize="12" VerticalAlignment="Center"/>
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

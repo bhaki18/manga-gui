@@ -14,6 +14,35 @@ namespace MangaGui.ViewModels;
 public partial class MainViewModel : ViewModelBase
 {
     private readonly MangaCliService _cliService;
+    private readonly UpdateService _updateService = new();
+    private UpdateCheckResult? _latestUpdateCheck;
+
+    [ObservableProperty]
+    private bool _isUpdateDialogVisible;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UpdateConfirmButtonText))]
+    private bool _isUpdating;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AppVersionText))]
+    private string _installedVersionText = $"v{UpdateService.GetInstalledVersion()}";
+
+    [ObservableProperty]
+    private string _remoteVersionText = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUpdateNotes))]
+    private string _updateNotesText = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUpdateProgress))]
+    private string _updateProgressLog = "";
+
+    public string AppVersionText => $"manga-gui {InstalledVersionText}";
+    public bool HasUpdateNotes => !string.IsNullOrWhiteSpace(UpdateNotesText);
+    public bool HasUpdateProgress => !string.IsNullOrWhiteSpace(UpdateProgressLog);
+    public string UpdateConfirmButtonText => IsUpdating ? "⏳ Aggiornamento in corso..." : "⚡ Aggiorna Ora (Scarica & Compila)";
 
     [ObservableProperty]
     private string _activeTab = "Anime";
@@ -341,6 +370,104 @@ public partial class MainViewModel : ViewModelBase
         UpdateAudioFiltersForLanguage(SelectedLanguage);
         _ = LoadSearchHistoryAsync();
         _ = LoadInitialCatalogAsync();
+        _ = CheckUpdatesOnStartupAsync();
+    }
+
+    private async Task CheckUpdatesOnStartupAsync()
+    {
+        await Task.Delay(1200);
+        await CheckUpdatesInternalAsync(isManual: false);
+    }
+
+    [RelayCommand]
+    public async Task CheckUpdatesAsync()
+    {
+        await CheckUpdatesInternalAsync(isManual: true);
+    }
+
+    private async Task CheckUpdatesInternalAsync(bool isManual)
+    {
+        try
+        {
+            if (isManual)
+            {
+                StatusText = "Controllo aggiornamenti online in corso...";
+            }
+
+            var check = await _updateService.CheckForUpdateAsync();
+            _latestUpdateCheck = check;
+            InstalledVersionText = $"v{check.InstalledVersion}";
+
+            if (check.CheckSucceeded && check.HasUpdate)
+            {
+                RemoteVersionText = $"v{check.RemoteVersion}";
+                UpdateNotesText = check.ReleaseNotes;
+                UpdateProgressLog = string.Empty;
+                IsUpdateDialogVisible = true;
+                StatusText = $"🚀 Nuova versione disponibile: v{check.RemoteVersion} (installata: v{check.InstalledVersion})";
+            }
+            else if (isManual)
+            {
+                if (check.CheckSucceeded)
+                {
+                    StatusText = $"✔ Nessun aggiornamento necessario: hai già l'ultima versione installata (v{check.InstalledVersion}).";
+                }
+                else
+                {
+                    StatusText = $"⚠️ {check.ErrorMessage ?? "Impossibile verificare gli aggiornamenti online."}";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            if (isManual)
+            {
+                StatusText = $"Errore controllo aggiornamenti: {ex.Message}";
+            }
+        }
+    }
+
+    [RelayCommand]
+    public void DismissUpdateDialog()
+    {
+        if (IsUpdating) return;
+        IsUpdateDialogVisible = false;
+    }
+
+    [RelayCommand]
+    public async Task StartUpdateAsync()
+    {
+        if (IsUpdating || _latestUpdateCheck == null) return;
+        IsUpdating = true;
+        UpdateProgressLog = "Avvio procedura di aggiornamento automatico...";
+        StatusText = $"Aggiornamento a v{_latestUpdateCheck.RemoteVersion} in corso...";
+
+        try
+        {
+            var (success, msg) = await _updateService.PerformUpdateAsync(_latestUpdateCheck, line =>
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    UpdateProgressLog = line;
+                    StatusText = line;
+                });
+            });
+
+            if (!success)
+            {
+                UpdateProgressLog = $"❌ {msg}";
+                StatusText = $"❌ {msg}";
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateProgressLog = $"❌ Errore: {ex.Message}";
+            StatusText = $"❌ Errore aggiornamento: {ex.Message}";
+        }
+        finally
+        {
+            IsUpdating = false;
+        }
     }
 
     private void RefreshSearchHistoryCollection(System.Collections.Generic.List<string> list)
