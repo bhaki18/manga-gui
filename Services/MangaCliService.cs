@@ -138,7 +138,13 @@ public class MangaCliService
     }
 
     
-                public static string NormalizeProviderSource(string? raw)
+    private static string EscapeArg(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        return s.Replace("\"", "\\\"");
+    }
+
+    public static string NormalizeProviderSource(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return "";
         var s = raw.ToLowerInvariant().Trim();
@@ -146,9 +152,96 @@ public class MangaCliService
         if (s.Contains("mangapill")) return "mangapill";
         if (s.Contains("animeworld")) return "animeworld";
         if (s.Contains("animesaturn")) return "animesaturn";
-        if (s.Contains("onepiecepower") || s.Contains("one piece power"))
+        if (s.Contains("onepiecepower") || s.Contains("one piece power") || s.Contains("oppower"))
             return s.Contains("anime") ? "onepiecepower-anime" : "onepiecepower";
         return s.Replace(" ", "");
+    }
+
+    public static string FormatSourceName(string? source)
+    {
+        var norm = NormalizeProviderSource(source);
+        return norm switch
+        {
+            "mangadex" => "MangaDex",
+            "mangapill" => "Mangapill",
+            "animeworld" => "AnimeWorld",
+            "onepiecepower-anime" => "One Piece Power Anime",
+            "onepiecepower" => "One Piece Power",
+            _ => !string.IsNullOrWhiteSpace(source) ? source : "Unknown"
+        };
+    }
+
+    private static List<MediaItem> ParseJsonMediaItems(string output, string type)
+    {
+        var list = new List<MediaItem>();
+        if (string.IsNullOrWhiteSpace(output)) return list;
+
+        try
+        {
+            var startIdx = output.IndexOf('[');
+            var endIdx = output.LastIndexOf(']');
+            if (startIdx < 0 || endIdx <= startIdx) return list;
+
+            var jsonSlice = output.Substring(startIdx, endIdx - startIdx + 1);
+            using var doc = JsonDocument.Parse(jsonSlice);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
+
+            foreach (var elem in doc.RootElement.EnumerateArray())
+            {
+                if (elem.ValueKind != JsonValueKind.Object) continue;
+
+                var title = elem.TryGetProperty("title", out var tProp) && tProp.ValueKind == JsonValueKind.String
+                    ? tProp.GetString() ?? "" : "";
+                if (string.IsNullOrWhiteSpace(title)) continue;
+
+                var url = elem.TryGetProperty("url", out var uProp) && uProp.ValueKind == JsonValueKind.String
+                    ? uProp.GetString() : null;
+                var id = elem.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.String
+                    ? idProp.GetString() : (url ?? title);
+                var rawSource = elem.TryGetProperty("source", out var sProp) && sProp.ValueKind == JsonValueKind.String
+                    ? sProp.GetString() ?? "" : "";
+                var rawSourceName = elem.TryGetProperty("sourceName", out var snProp) && snProp.ValueKind == JsonValueKind.String
+                    ? snProp.GetString() ?? "" : "";
+                var normSource = NormalizeProviderSource(!string.IsNullOrWhiteSpace(rawSource) ? rawSource : rawSourceName);
+                var displaySourceName = !string.IsNullOrWhiteSpace(rawSourceName) ? rawSourceName : FormatSourceName(normSource);
+
+                var lang = elem.TryGetProperty("language", out var lProp) && lProp.ValueKind == JsonValueKind.String
+                    ? lProp.GetString() ?? "it" : "it";
+                var audio = elem.TryGetProperty("audio", out var aProp) && aProp.ValueKind == JsonValueKind.String
+                    ? aProp.GetString() ?? "" : "";
+                var author = elem.TryGetProperty("author", out var auProp) && auProp.ValueKind == JsonValueKind.String
+                    ? auProp.GetString() ?? "" : "";
+
+                string genres = "";
+                if (elem.TryGetProperty("genres", out var gProp))
+                {
+                    if (gProp.ValueKind == JsonValueKind.String)
+                        genres = gProp.GetString() ?? "";
+                    else if (gProp.ValueKind == JsonValueKind.Array)
+                        genres = string.Join(", ", gProp.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()));
+                }
+
+                list.Add(new MediaItem
+                {
+                    Id = id ?? title,
+                    Title = title,
+                    Url = url,
+                    Type = type,
+                    Source = normSource,
+                    SourceName = displaySourceName,
+                    Language = lang,
+                    Audio = !string.IsNullOrWhiteSpace(audio) ? audio : lang.ToUpperInvariant(),
+                    Author = author,
+                    Genres = genres
+                });
+            }
+        }
+        catch
+        {
+            // Fallback handled by caller
+        }
+
+        return list;
     }
 
     private static List<string> ExtractPagesFromOutput(string output)
@@ -171,6 +264,8 @@ public class MangaCliService
             return "https://mangadex.org/";
         if (p0.Contains("onepiecepower") || provider.Contains("onepiecepower"))
             return "https://onepiecepower.com/";
+        if (p0.Contains("animeworld") || provider.Contains("animeworld"))
+            return "https://www.animeworld.ac/";
         try
         {
             var uri = new Uri(pages[0]);
@@ -185,8 +280,8 @@ public class MangaCliService
     public static string CleanMediaTitle(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
-        var t = Regex.Replace(raw, @"\s*\[[A-Za-z0-9_\-]+\]", "").Trim();
-        t = Regex.Replace(t, @"\s*\((?:[A-Za-z0-9_\-,\s]+)\)$", "").Trim();
+        var t = Regex.Replace(raw, @"\s*\[[^\]]+\]", "").Trim();
+        t = Regex.Replace(t, @"\s*\((?:[A-Za-z0-9_\-,\s/]+)\)$", "").Trim();
         return string.IsNullOrWhiteSpace(t) ? raw.Trim() : t;
     }
 
@@ -278,8 +373,12 @@ public class MangaCliService
                 : "-l all";
             var src = NormalizeProviderSource(item.Source);
             var srcArg = !string.IsNullOrWhiteSpace(src) && src != "all" && src != "downloaded" ? $"-s \"{src}\"" : "";
-            var typeArg = isManga ? $"-m {srcArg} {langArg} -C {number} -d \"{targetDir}\"" : $"-a {srcArg} -e {number} -d \"{targetDir}\"";
-            var output = await RunCommandWithProgressAsync($"\"{cleanTitle}\" {typeArg}", onProgress);
+            var urlArg = !string.IsNullOrWhiteSpace(item.Url) && item.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                ? $"--url \"{EscapeArg(item.Url)}\"" : "";
+            var typeArg = isManga
+                ? $"-m {srcArg} {urlArg} {langArg} -C {number} -d \"{targetDir}\""
+                : $"-a {srcArg} {urlArg} -e {number} -d \"{targetDir}\"";
+            var output = await RunCommandWithProgressAsync($"\"{EscapeArg(cleanTitle)}\" {typeArg}", onProgress);
             
             var match = Regex.Match(output, @"Destination:\s*([^\r\n]+)", RegexOptions.IgnoreCase);
             var dest = match.Success ? match.Groups[1].Value.Trim() : null;
@@ -471,9 +570,14 @@ public class MangaCliService
         try
         {
             var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
-                ? $"-s \"{source}\"" : "";
-            var output = await RunCommandAsync($"--catalog-anime {srcArg} --list");
-            var items = ParseCatalogOutput(output, "anime");
+                ? $"-s \"{EscapeArg(source)}\"" : "";
+            var output = await RunCommandAsync($"--catalog-anime {srcArg} --json");
+            var items = ParseJsonMediaItems(output, "anime");
+            if (items.Count == 0)
+            {
+                var fallbackOutput = await RunCommandAsync($"--catalog-anime {srcArg} --list");
+                items = ParseCatalogOutput(fallbackOutput, "anime");
+            }
 
             EnrichCoversAsync(items, "anime");
 
@@ -491,9 +595,14 @@ public class MangaCliService
         try
         {
             var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
-                ? $"-s \"{source}\"" : "";
-            var output = await RunCommandAsync($"--catalog-manga {srcArg} --list");
-            var items = ParseCatalogOutput(output, "manga");
+                ? $"-s \"{EscapeArg(source)}\"" : "";
+            var output = await RunCommandAsync($"--catalog-manga {srcArg} --json");
+            var items = ParseJsonMediaItems(output, "manga");
+            if (items.Count == 0)
+            {
+                var fallbackOutput = await RunCommandAsync($"--catalog-manga {srcArg} --list");
+                items = ParseCatalogOutput(fallbackOutput, "manga");
+            }
 
             EnrichCoversAsync(items, "manga");
 
@@ -556,16 +665,24 @@ public class MangaCliService
         try
         {
             var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
-                ? $"-s \"{source}\"" : "";
-            var output = await RunCommandAsync($"\"{query}\" -a {srcArg} --list");
-            var items = ParseSearchOutput(output, "anime");
+                ? $"-s \"{EscapeArg(source)}\"" : "";
+            var output = await RunCommandAsync($"\"{EscapeArg(query)}\" -a {srcArg} --list --json");
+            var items = ParseJsonMediaItems(output, "anime");
+            if (items.Count == 0 && !output.TrimStart().StartsWith("["))
+            {
+                items = ParseSearchOutput(output, "anime");
+            }
             if (items.Count == 0)
             {
                 var segmented = GetSegmentedQuery(query);
                 if (!string.IsNullOrWhiteSpace(segmented))
                 {
-                    var fallbackOutput = await RunCommandAsync($"\"{segmented}\" -a {srcArg} --list");
-                    var fallbackItems = ParseSearchOutput(fallbackOutput, "anime");
+                    var fallbackOutput = await RunCommandAsync($"\"{EscapeArg(segmented)}\" -a {srcArg} --list --json");
+                    var fallbackItems = ParseJsonMediaItems(fallbackOutput, "anime");
+                    if (fallbackItems.Count == 0 && !fallbackOutput.TrimStart().StartsWith("["))
+                    {
+                        fallbackItems = ParseSearchOutput(fallbackOutput, "anime");
+                    }
                     if (fallbackItems.Count > 0) items = fallbackItems;
                 }
             }
@@ -586,17 +703,25 @@ public class MangaCliService
         try
         {
             var srcArg = !string.IsNullOrWhiteSpace(source) && source != "all" && source != "Tutte le fonti" && source != "All sources" 
-                ? $"-s \"{source}\"" : "";
-            var langArg = !string.IsNullOrWhiteSpace(lang) ? $"-l {lang}" : "-l it";
-            var output = await RunCommandAsync($"\"{query}\" -m {srcArg} {langArg} --list");
-            var items = ParseSearchOutput(output, "manga");
+                ? $"-s \"{EscapeArg(source)}\"" : "";
+            var langArg = !string.IsNullOrWhiteSpace(lang) ? $"-l {lang}" : "-l all";
+            var output = await RunCommandAsync($"\"{EscapeArg(query)}\" -m {srcArg} {langArg} --list --json");
+            var items = ParseJsonMediaItems(output, "manga");
+            if (items.Count == 0 && !output.TrimStart().StartsWith("["))
+            {
+                items = ParseSearchOutput(output, "manga");
+            }
             if (items.Count == 0)
             {
                 var segmented = GetSegmentedQuery(query);
                 if (!string.IsNullOrWhiteSpace(segmented))
                 {
-                    var fallbackOutput = await RunCommandAsync($"\"{segmented}\" -m {srcArg} {langArg} --list");
-                    var fallbackItems = ParseSearchOutput(fallbackOutput, "manga");
+                    var fallbackOutput = await RunCommandAsync($"\"{EscapeArg(segmented)}\" -m {srcArg} {langArg} --list --json");
+                    var fallbackItems = ParseJsonMediaItems(fallbackOutput, "manga");
+                    if (fallbackItems.Count == 0 && !fallbackOutput.TrimStart().StartsWith("["))
+                    {
+                        fallbackItems = ParseSearchOutput(fallbackOutput, "manga");
+                    }
                     if (fallbackItems.Count > 0) items = fallbackItems;
                 }
             }
@@ -616,8 +741,18 @@ public class MangaCliService
     {
         try
         {
-            var typeArg = item.Type.ToLower() == "manga" ? "-m -l it" : "-a";
-            var output = await RunCommandAsync($"\"{item.Title}\" {typeArg} -i");
+            var isManga = item.Type.ToLower() == "manga";
+            var cleanTitle = CleanMediaTitle(item.Title);
+            var src = NormalizeProviderSource(item.Source);
+            var srcArg = !string.IsNullOrWhiteSpace(src) && src != "all" && src != "downloaded"
+                ? $"-s \"{src}\"" : "";
+            var urlArg = !string.IsNullOrWhiteSpace(item.Url) && item.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                ? $"--url \"{EscapeArg(item.Url)}\"" : "";
+            var langArg = isManga
+                ? (!string.IsNullOrWhiteSpace(item.Language) && item.Language.ToLower() != "it" ? $"-l {item.Language}" : "-l all")
+                : "";
+            var typeArg = isManga ? $"-m {srcArg} {urlArg} {langArg}" : $"-a {srcArg} {urlArg}";
+            var output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" {typeArg} -i");
             var m = Regex.Match(output, @"Total\s+(?:episodes|chapters):\s*(\d+)", RegexOptions.IgnoreCase);
             if (m.Success && int.TryParse(m.Groups[1].Value, out var total) && total > 0)
             {
@@ -635,17 +770,38 @@ public class MangaCliService
     {
         try
         {
-            var output = await RunCommandAsync($"\"{item.Title}\" -a -e {episode} --get-url");
+            var cleanTitle = CleanMediaTitle(item.Title);
+            var src = NormalizeProviderSource(item.Source);
+            var srcArg = !string.IsNullOrWhiteSpace(src) && src != "all" && src != "downloaded"
+                ? $"-s \"{src}\"" : "";
+            var urlArg = !string.IsNullOrWhiteSpace(item.Url) && item.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                ? $"--url \"{EscapeArg(item.Url)}\"" : "";
+
+            var output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" -a {srcArg} {urlArg} -e {episode} --get-url");
             var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             var streamUrl = lines.FirstOrDefault(l => l.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
                                                       l.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
 
+            // Fallback across all anime providers if primary source/URL failed
+            if (string.IsNullOrWhiteSpace(streamUrl))
+            {
+                output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" -a -e {episode} --get-url");
+                lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                streamUrl = lines.FirstOrDefault(l => l.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
+                                                      l.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
+            }
+
             if (!string.IsNullOrWhiteSpace(streamUrl))
             {
+                var trimmedUrl = streamUrl.Trim();
+                var referrer = GetReferrerForPages(new List<string> { trimmedUrl }, src);
+                var refArg = !string.IsNullOrWhiteSpace(referrer) ? $"--referrer=\"{referrer}\"" : "";
+                var uaArg = "--user-agent=\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36\"";
+
                 var mpvPsi = new ProcessStartInfo
                 {
                     FileName = ResolveMpvPath(),
-                    Arguments = $"\"{streamUrl.Trim()}\" --title=\"{item.Title} - Episode {episode}\" --force-window=immediate",
+                    Arguments = $"\"{trimmedUrl}\" --title=\"{EscapeArg(item.Title)} - Episode {episode}\" {refArg} {uaArg} --force-window=immediate",
                     UseShellExecute = false,
                     RedirectStandardOutput = false,
                     RedirectStandardError = false,
@@ -653,6 +809,14 @@ public class MangaCliService
                 };
                 PassDisplayEnv(mpvPsi);
                 Process.Start(mpvPsi);
+
+                if (!item.WatchedNumbers.Contains(episode))
+                {
+                    item.WatchedNumbers.Add(episode);
+                    item.WatchedNumbers.Sort();
+                    item.UpdateWatchedSummary();
+                }
+
                 return (true, $"Playing: {item.Title} (Episode {episode})");
             }
 
@@ -683,7 +847,7 @@ public class MangaCliService
                     var localPsi = new ProcessStartInfo
                     {
                         FileName = ResolveMpvPath(),
-                        Arguments = $"--title=\"{item.Title} - Chapter {chapter} (Offline)\" --image-display-duration=inf \"{localChapterDir}\"",
+                        Arguments = $"--title=\"{EscapeArg(item.Title)} - Chapter {chapter} (Offline)\" --image-display-duration=inf \"{localChapterDir}\"",
                         UseShellExecute = false,
                         RedirectStandardOutput = false,
                         RedirectStandardError = false,
@@ -700,31 +864,33 @@ public class MangaCliService
             var src = NormalizeProviderSource(item.Source);
             var srcArg = !string.IsNullOrWhiteSpace(src) && src != "all" && src != "downloaded"
                 ? $"-s \"{src}\"" : "";
+            var urlArg = !string.IsNullOrWhiteSpace(item.Url) && item.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                ? $"--url \"{EscapeArg(item.Url)}\"" : "";
             var langArg = !string.IsNullOrWhiteSpace(item.Language) && item.Language.ToLower() != "it" 
                 ? $"-l {item.Language}" 
                 : "-l all";
 
-            var output = await RunCommandAsync($"\"{cleanTitle}\" -m {srcArg} {langArg} -C {chapter} --get-url");
+            var output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" -m {srcArg} {urlArg} {langArg} -C {chapter} --get-url");
             var pages = ExtractPagesFromOutput(output);
 
             // Fallback 1: Try onepiecepower (Italian scanlations) if primary failed
             if (pages.Count == 0 && src != "onepiecepower")
             {
-                output = await RunCommandAsync($"\"{cleanTitle}\" -m -s onepiecepower -C {chapter} --get-url");
+                output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" -m -s onepiecepower -l all -C {chapter} --get-url");
                 pages = ExtractPagesFromOutput(output);
             }
 
             // Fallback 2: Try mangapill (free fast English scans)
             if (pages.Count == 0 && src != "mangapill")
             {
-                output = await RunCommandAsync($"\"{cleanTitle}\" -m -s mangapill -l en -C {chapter} --get-url");
+                output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" -m -s mangapill -l en -C {chapter} --get-url");
                 pages = ExtractPagesFromOutput(output);
             }
 
             // Fallback 3: Try general search across all providers
             if (pages.Count == 0)
             {
-                output = await RunCommandAsync($"\"{cleanTitle}\" -m -l all -C {chapter} --get-url");
+                output = await RunCommandAsync($"\"{EscapeArg(cleanTitle)}\" -m -l all -C {chapter} --get-url");
                 pages = ExtractPagesFromOutput(output);
             }
 
@@ -738,11 +904,12 @@ public class MangaCliService
 
                 var referrer = GetReferrerForPages(pages, src);
                 var refArg = !string.IsNullOrWhiteSpace(referrer) ? $"--referrer=\"{referrer}\"" : "";
+                var uaArg = "--user-agent=\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36\"";
 
                 var mpvPsi = new ProcessStartInfo
                 {
                     FileName = ResolveMpvPath(),
-                    Arguments = $"--title=\"{item.Title} - Chapter {chapter}\" --image-display-duration=inf {refArg} --playlist=\"{playlistFile}\"",
+                    Arguments = $"--title=\"{EscapeArg(item.Title)} - Chapter {chapter}\" --image-display-duration=inf {refArg} {uaArg} --playlist=\"{playlistFile}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = false,
                     RedirectStandardError = false,
@@ -750,6 +917,14 @@ public class MangaCliService
                 };
                 PassDisplayEnv(mpvPsi);
                 Process.Start(mpvPsi);
+
+                if (!item.WatchedNumbers.Contains(chapter))
+                {
+                    item.WatchedNumbers.Add(chapter);
+                    item.WatchedNumbers.Sort();
+                    item.UpdateWatchedSummary();
+                }
+
                 return (true, $"Reader opened: {item.Title} (Chapter {chapter} - {pages.Count} pages)");
             }
 
@@ -915,7 +1090,7 @@ public class MangaCliService
                 continue;
             }
 
-            var itemMatch = Regex.Match(line, @"^\s*\d+\.\s+(.*?)\s+\[([A-Za-z0-9_\-]+)\](?:\s+\((.*?)\))?$");
+            var itemMatch = Regex.Match(line, @"^\s*\d+\.\s+(.*?)\s+\[([^\]]+)\](?:\s+\((.*?)\))?$");
             if (itemMatch.Success)
             {
                 var title = itemMatch.Groups[1].Value.Trim();
@@ -929,7 +1104,7 @@ public class MangaCliService
                     Audio = tag,
                     Language = tag.ToLower(),
                     Genres = genres,
-                    Source = currentSource.ToLower().Replace(" ", ""),
+                    Source = NormalizeProviderSource(currentSource),
                     SourceName = currentSource
                 });
             }
@@ -942,7 +1117,7 @@ public class MangaCliService
                     {
                         Title = simpleMatch.Groups[1].Value.Trim(),
                         Type = type,
-                        Source = currentSource.ToLower().Replace(" ", ""),
+                        Source = NormalizeProviderSource(currentSource),
                         SourceName = currentSource
                     });
                 }
@@ -959,23 +1134,39 @@ public class MangaCliService
 
         foreach (var line in lines)
         {
-            var m = Regex.Match(line, @"^\s*-\s+(.*?)(?:\s+\[(.*?)\])?(?:\s+\[(.*?)\])?$");
+            var m = Regex.Match(line, @"^\s*-\s+(.*?)(?:\s+\[([^\]]+)\])?(?:\s+\[([^\]]+)\])?$");
             if (m.Success)
             {
                 var title = m.Groups[1].Value.Trim();
                 var tag1 = m.Groups[2].Success ? m.Groups[2].Value.Trim() : "";
                 var tag2 = m.Groups[3].Success ? m.Groups[3].Value.Trim() : "";
 
-                var audio = tag1;
-                var source = !string.IsNullOrWhiteSpace(tag2) ? tag2 : "One Piece Power";
+                string audio;
+                string sourceRaw;
+                if (!string.IsNullOrWhiteSpace(tag2))
+                {
+                    audio = tag1;
+                    sourceRaw = tag2;
+                }
+                else if (type == "manga" && !string.IsNullOrWhiteSpace(tag1))
+                {
+                    audio = "";
+                    sourceRaw = tag1;
+                }
+                else
+                {
+                    audio = tag1;
+                    sourceRaw = "One Piece Power";
+                }
 
+                var normSource = NormalizeProviderSource(sourceRaw);
                 list.Add(new MediaItem
                 {
                     Title = title,
                     Type = type,
                     Audio = audio,
-                    Source = source.ToLower().Replace(" ", ""),
-                    SourceName = source
+                    Source = normSource,
+                    SourceName = FormatSourceName(normSource)
                 });
             }
         }

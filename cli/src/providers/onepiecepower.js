@@ -2,6 +2,23 @@ const cheerio = require('cheerio');
 const BaseProvider = require('./base');
 const { fetchHtml, checkUrlExists } = require('../utils/http');
 
+const POPULAR_MANGA_KEYWORDS = [
+  'one piece', 'berserk', 'jujutsu kaisen', 'chainsaw man', 'solo leveling',
+  'demon slayer', 'kimetsu no yaiba', 'naruto', 'bleach', 'dragon ball',
+  'attack on titan', 'shingeki no kyojin', 'my hero academia', 'boku no hero',
+  'hunter x hunter', 'death note', 'tokyo ghoul', 'black clover', 'dandadan',
+  'blue lock', 'vinland saga', 'monster', 'fullmetal alchemist', 'spy x family',
+  'one punch man', 'one-punch man', 'sakamoto days', 'kingdom', 'gachiakuta',
+  'kagurabachi', 'fairy tail', 'fire force', 'dr. stone', 'frieren',
+  'vagabond', 'claymore', '20th century boys', 'gantz', 'slam dunk',
+  'haikyuu', 'tokyo revengers', 'boruto', 'kaiju', 'undead unluck',
+  'mashle', 'jigokuraku', 'oshi no ko', 'baki', 'jojo', 'soul eater',
+  'hellsing', 'akira', 'dorohedoro', 'cyberpunk', 'evangelion', 'mob psycho',
+  'overlord', 'goblin slayer', 'record of ragnarok', 'shuumatsu no valkyrie',
+  'blue exorcist', 'ao no exorcist', 'noragami', 'assassination classroom',
+  'seven deadly sins', 'nanatsu no taizai', 'promised neverland', 'dr stone'
+];
+
 class OnePiecePowerProvider extends BaseProvider {
   constructor() {
     super('One Piece Power', 'https://onepiecepower.com', {
@@ -18,9 +35,9 @@ class OnePiecePowerProvider extends BaseProvider {
   }
 
   /**
-   * Fetches the entire manga catalog from /manga8/lista-manga2
+   * Fetches the entire manga archive from /manga8/lista-manga3 (or lista-manga2)
    */
-  async getCatalog() {
+  async getAllManga() {
     if (this.mangaListCache) {
       return this.mangaListCache;
     }
@@ -36,23 +53,31 @@ class OnePiecePowerProvider extends BaseProvider {
 
     // One Piece ITA
     mangaList.push({
+      id: 'onepiece-it',
       title: 'One Piece',
       url: `${this.baseUrl}/manga8/onepiece/volumi/lista-capitoli`,
       author: 'Eiichiro Oda',
       genres: 'Avventura, Shounen, Azione',
       altTitle: 'One Piece',
+      source: 'onepiecepower',
+      sourceName: 'One Piece Power',
       language: 'it'
     });
 
-    // One Piece ENG (Full english release of all 1200 chapters)
+    // One Piece ENG
     mangaList.push({
+      id: 'onepiece-en',
       title: 'One Piece (English Edition)',
       url: `${this.baseUrl}/manga8/one-piece-eng/chapter-list`,
       author: 'Eiichiro Oda',
       genres: 'Adventure, Shounen, Action',
       altTitle: 'One Piece ENG',
+      source: 'onepiecepower',
+      sourceName: 'One Piece Power',
       language: 'en'
     });
+
+    const seenUrls = new Set(mangaList.map(m => m.url));
 
     $('a').each((_, el) => {
       const href = $(el).attr('href');
@@ -71,13 +96,19 @@ class OnePiecePowerProvider extends BaseProvider {
             : `${this.baseUrl}/manga8/${fullUrl}`;
         }
 
+        if (seenUrls.has(fullUrl)) return;
+        seenUrls.add(fullUrl);
+
         mangaList.push({
+          id: fullUrl,
           title,
           url: fullUrl,
           author,
           genres,
           altTitle: alt,
-          language: 'it' // Most scanlations on OPP are translated to Italian
+          source: 'onepiecepower',
+          sourceName: 'One Piece Power',
+          language: 'it'
         });
       }
     });
@@ -87,15 +118,53 @@ class OnePiecePowerProvider extends BaseProvider {
   }
 
   /**
-   * Search manga by keyword and optional language filter
+   * Returns top/popular catalog for browsing
+   */
+  async getCatalog(lang = null) {
+    const all = await this.getAllManga();
+    const filtered = (lang && lang !== 'all')
+      ? all.filter(m => m.language === lang)
+      : all;
+
+    const popular = [];
+    const rest = [];
+
+    for (const item of filtered) {
+      const t = item.title.toLowerCase();
+      const alt = (item.altTitle || '').toLowerCase();
+      const isPop = POPULAR_MANGA_KEYWORDS.some(k => t === k || t.startsWith(k + ' ') || t.includes(k) || alt.includes(k));
+      if (isPop) {
+        popular.push(item);
+      } else {
+        rest.push(item);
+      }
+    }
+
+    // Sort popular by keyword order
+    popular.sort((a, b) => {
+      const ta = a.title.toLowerCase();
+      const tb = b.title.toLowerCase();
+      const ia = POPULAR_MANGA_KEYWORDS.findIndex(k => ta === k || ta.includes(k));
+      const ib = POPULAR_MANGA_KEYWORDS.findIndex(k => tb === k || tb.includes(k));
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    });
+
+    return [...popular, ...rest].slice(0, 100);
+  }
+
+  /**
+   * Search manga by keyword and optional language filter (searches full 2700+ archive)
    */
   async search(query, lang = null) {
-    const catalog = await this.getCatalog();
+    if (!query || !query.trim()) {
+      return this.getCatalog(lang);
+    }
+    const catalog = await this.getAllManga();
     const cleanQuery = query.toLowerCase().trim();
     const cleanNorm = cleanQuery.replace(/[^a-z0-9]/g, '');
 
     return catalog.filter(m => {
-      if (lang && m.language !== lang) return false;
+      if (lang && lang !== 'all' && m.language !== lang) return false;
       const titleLower = m.title.toLowerCase();
       const matchTitle = titleLower.includes(cleanQuery) || 
                          (cleanNorm.length >= 3 && titleLower.replace(/[^a-z0-9]/g, '').includes(cleanNorm));
@@ -110,7 +179,7 @@ class OnePiecePowerProvider extends BaseProvider {
    * Pick a random manga from catalog
    */
   async getRandomManga(lang = null) {
-    const catalog = await this.getCatalog();
+    const catalog = await this.getAllManga();
     const filtered = lang && lang !== 'all' ? catalog.filter(m => m.language === lang) : catalog;
     if (filtered.length === 0) return null;
     const idx = Math.floor(Math.random() * filtered.length);
@@ -134,19 +203,18 @@ class OnePiecePowerProvider extends BaseProvider {
         if (fullUrl.startsWith('/')) {
           fullUrl = `${this.baseUrl}${fullUrl}`;
         } else {
-          // Relative to current page
           const cleanMangaUrl = mangaUrl.replace(/\/(lista-capitoli|chapter-list).*$/, '');
           fullUrl = `${cleanMangaUrl}/${href.replace(/^\.\//, '')}`;
         }
       }
 
-      // Extract chapter number
       const match = href.match(/reader\/([^/?#]+)/);
       const capId = match ? match[1] : '';
 
       if (capId && !chapters.some(c => c.url === fullUrl)) {
         chapters.push({
           id: capId,
+          number: capId.replace(/^0+/, '') || '0',
           title: title || `Chapter ${capId}`,
           url: fullUrl
         });
@@ -163,7 +231,6 @@ class OnePiecePowerProvider extends BaseProvider {
     const html = await fetchHtml(chapterUrl);
     const $ = cheerio.load(html);
 
-    // Look for script content containing getPageLink, volText/vol, etc.
     let scriptContent = '';
     $('script').each((_, el) => {
       const text = $(el).html() || '';
@@ -172,14 +239,11 @@ class OnePiecePowerProvider extends BaseProvider {
       }
     });
 
-    // Detect baseUrl
     let cleanUrl = chapterUrl.split('?')[0];
     const baseUrl = cleanUrl.split('reader/')[0];
     const rawCap = cleanUrl.split('reader/')[1].split('/')[0].split('.php')[0];
 
-    // Check if it's One Piece format: const vol = "099" + "/"; or "002" + "/";
     const opVolMatch = scriptContent.match(/const\s+vol\s*=\s*["']([^"']+)["']/);
-    // Or standard format: const volText = "02";
     const stdVolMatch = scriptContent.match(/const\s+volText\s*=\s*["']([^"']+)["']/);
 
     let workingGenerator = null;
@@ -208,7 +272,6 @@ class OnePiecePowerProvider extends BaseProvider {
         return `${baseUrl}volume${vol}/capitolo${formattedCap}/${formattedPage}.jpg`;
       };
     } else {
-      // Fallbacks only if script variables are missing
       const fallbacks = [
         (p) => `${baseUrl}volume${rawCap}/capitolo${rawCap}/${p < 10 ? '0' + p : p}.jpg`,
         (p) => `${baseUrl}capitolo${rawCap}/${p < 10 ? '0' + p : p}.jpg`
@@ -227,10 +290,8 @@ class OnePiecePowerProvider extends BaseProvider {
     return {
       title: title || `Chapter ${rawCap}`,
       chapterUrl,
-      // Provide instant page 1 without waiting for full batch scans
       page1: workingGenerator(1),
       getPageLinkFn: workingGenerator,
-      // Helper function to quickly discover all pages in background
       discoverRemainingPages: async () => {
         const pages = [workingGenerator(1)];
         let current = 2;

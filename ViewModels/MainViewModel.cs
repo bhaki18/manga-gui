@@ -104,10 +104,44 @@ public partial class MainViewModel : ViewModelBase
         "mangapill"
     };
 
+    private bool _isUpdatingSources;
+
+    private void UpdateSourcesForTab(string tab)
+    {
+        string[] desired = tab == "Manga"
+            ? new[] { "All sources", "onepiecepower", "mangadex", "mangapill" }
+            : new[] { "All sources", "animeworld", "onepiecepower", "onepiecepower-anime" };
+
+        _isUpdatingSources = true;
+        try
+        {
+            var current = SelectedSource;
+            Sources.Clear();
+            foreach (var s in desired)
+            {
+                Sources.Add(s);
+            }
+
+            if (!string.IsNullOrWhiteSpace(current) && desired.Contains(current))
+            {
+                SelectedSource = current;
+            }
+            else
+            {
+                SelectedSource = "All sources";
+            }
+        }
+        finally
+        {
+            _isUpdatingSources = false;
+        }
+    }
+
     public MainViewModel(string[]? args = null)
     {
         _cliService = new MangaCliService();
         ParseCommandLineArgs(args);
+        UpdateSourcesForTab(ActiveTab);
         _ = LoadInitialCatalogAsync();
     }
 
@@ -151,14 +185,26 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnSelectedSourceChanged(string value)
     {
-        if (ActiveTab != "History" && ActiveTab != "Cronologia")
+        if (_isUpdatingSources || string.IsNullOrWhiteSpace(value)) return;
+        if (ActiveTab == "Anime" || ActiveTab == "Manga")
         {
-            _ = LoadCatalogAsync();
+            if (!string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                _ = SearchAsync();
+            }
+            else
+            {
+                _ = LoadCatalogAsync();
+            }
         }
     }
 
     partial void OnActiveTabChanged(string value)
     {
+        if (value == "Anime" || value == "Manga")
+        {
+            UpdateSourcesForTab(value);
+        }
         OnPropertyChanged(nameof(AnimeTabColor));
         OnPropertyChanged(nameof(MangaTabColor));
         OnPropertyChanged(nameof(DownloadedTabColor));

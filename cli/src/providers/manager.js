@@ -10,6 +10,7 @@ const OnePiecePowerProvider = require('./onepiecepower');
 const MangaDexProvider = require('./mangadex');
 const MangapillProvider = require('./mangapill');
 const OnePiecePowerAnimeProvider = require('./onepiecepower-anime');
+const createAnimeWorldProvider = require('./community/animeworld');
 
 const CONFIG_DIR = process.env.MANGA_CLI_CONFIG_DIR || 
   (process.env.XDG_CONFIG_HOME 
@@ -50,11 +51,21 @@ class ProviderManager {
     const mp = new MangapillProvider();
     const oppAnime = new OnePiecePowerAnimeProvider();
 
+    const AnimeWorldProvider = createAnimeWorldProvider({
+      BaseProvider,
+      BaseMangaProvider,
+      BaseAnimeProvider,
+      cheerio,
+      ...http
+    });
+    const aw = new AnimeWorldProvider();
+
     this.mangaProviders.set(opp.id, opp);
     this.mangaProviders.set(md.id, md);
     this.mangaProviders.set(mp.id, mp);
 
     this.animeProviders.set(oppAnime.id, oppAnime);
+    this.animeProviders.set(aw.id, aw);
   }
 
   loadCustomProviders() {
@@ -114,9 +125,14 @@ class ProviderManager {
           }
         }
 
+        // Do not overwrite built-in providers with outdated copies in ~/.config/manga-cli/providers
         if (instance.type === 'anime') {
+          const existing = this.animeProviders.get(instance.id);
+          if (existing && existing.isBuiltIn) continue;
           this.animeProviders.set(instance.id, instance);
         } else {
+          const existing = this.mangaProviders.get(instance.id);
+          if (existing && existing.isBuiltIn) continue;
           this.mangaProviders.set(instance.id, instance);
         }
       } catch (err) {
@@ -140,15 +156,43 @@ class ProviderManager {
     return Array.from(this.animeProviders.values());
   }
 
+  matchesSource(provider, sourceFilter) {
+    if (!sourceFilter) return true;
+    const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const f = norm(sourceFilter);
+    if (!f || f === 'all' || f === 'allsources' || f === 'tuttelefonti') return true;
+    const pid = norm(provider.id);
+    const pname = norm(provider.name);
+    if (pid === f || pname === f || pid.includes(f) || pname.includes(f) || f.includes(pid)) return true;
+    if ((f === 'onepiecepower' || f === 'onepiecepoweranime') && pid.includes('onepiecepower')) return true;
+    return false;
+  }
+
+  interleaveArrays(arrays) {
+    const valid = arrays.filter(a => Array.isArray(a) && a.length > 0);
+    if (valid.length === 0) return [];
+    if (valid.length === 1) return valid[0];
+
+    const result = [];
+    const maxLen = Math.max(...valid.map(a => a.length));
+    for (let i = 0; i < maxLen; i++) {
+      for (const arr of valid) {
+        if (i < arr.length) {
+          result.push(arr[i]);
+        }
+      }
+    }
+    return result;
+  }
+
   getMangaProvider(id) {
     if (!id) return this.mangaProviders.get('onepiecepower');
     const cleanId = String(id).toLowerCase().trim();
     if (this.mangaProviders.has(cleanId)) {
       return this.mangaProviders.get(cleanId);
     }
-    // Partial or name match fallback
-    for (const [key, prov] of this.mangaProviders.entries()) {
-      if (key.includes(cleanId) || prov.name.toLowerCase().includes(cleanId)) {
+    for (const prov of this.mangaProviders.values()) {
+      if (this.matchesSource(prov, cleanId)) {
         return prov;
       }
     }
@@ -161,8 +205,8 @@ class ProviderManager {
     if (this.animeProviders.has(cleanId)) {
       return this.animeProviders.get(cleanId);
     }
-    for (const [key, prov] of this.animeProviders.entries()) {
-      if (key.includes(cleanId) || prov.name.toLowerCase().includes(cleanId)) {
+    for (const prov of this.animeProviders.values()) {
+      if (this.matchesSource(prov, cleanId)) {
         return prov;
       }
     }
@@ -234,17 +278,7 @@ class ProviderManager {
     let providers = this.getMangaProviders();
 
     if (sourceFilter) {
-      const cleanFilter = String(sourceFilter).toLowerCase();
-      providers = providers.filter(p => 
-        p.id.toLowerCase() === cleanFilter || 
-        p.name.toLowerCase().includes(cleanFilter)
-      );
-    } else if (lang) {
-      const cleanLang = lang.toLowerCase();
-      providers = providers.filter(p => {
-        if (cleanLang === 'all') return true;
-        return p.languages.includes(cleanLang) || p.languages.includes('all');
-      });
+      providers = providers.filter(p => this.matchesSource(p, sourceFilter));
     }
 
     if (providers.length === 0) {
@@ -264,9 +298,10 @@ class ProviderManager {
         if (!Array.isArray(items)) return [];
         return items.map(item => ({
           ...item,
+          type: 'manga',
           source: item.source || provider.id,
-          sourceName: provider.name,
-          language: item.language || lang || (provider.languages[0] !== 'all' ? provider.languages[0] : 'en')
+          sourceName: item.sourceName || provider.name,
+          language: item.language || (lang && lang !== 'all' ? lang : (provider.languages[0] !== 'all' ? provider.languages[0] : 'en'))
         }));
       } catch (err) {
         return [];
@@ -274,30 +309,20 @@ class ProviderManager {
     });
 
     const settled = await Promise.allSettled(searchPromises);
-    const results = [];
+    const arrays = [];
     for (const res of settled) {
-      if (res.status === 'fulfilled' && Array.isArray(res.value)) {
-        results.push(...res.value);
+      if (res.status === 'fulfilled' && Array.isArray(res.value) && res.value.length > 0) {
+        arrays.push(res.value);
       }
     }
-    return results;
+    return this.interleaveArrays(arrays);
   }
 
   async searchAnime(query, lang = null, sourceFilter = null) {
     let providers = this.getAnimeProviders();
 
     if (sourceFilter) {
-      const cleanFilter = String(sourceFilter).toLowerCase();
-      providers = providers.filter(p => 
-        p.id.toLowerCase() === cleanFilter || 
-        p.name.toLowerCase().includes(cleanFilter)
-      );
-    } else if (lang) {
-      const cleanLang = lang.toLowerCase();
-      providers = providers.filter(p => {
-        if (cleanLang === 'all') return true;
-        return p.languages.includes(cleanLang) || p.languages.includes('all');
-      });
+      providers = providers.filter(p => this.matchesSource(p, sourceFilter));
     }
 
     if (providers.length === 0) {
@@ -317,9 +342,10 @@ class ProviderManager {
         if (!Array.isArray(items)) return [];
         return items.map(item => ({
           ...item,
+          type: 'anime',
           source: item.source || provider.id,
-          sourceName: provider.name,
-          language: item.language || lang || (provider.languages[0] !== 'all' ? provider.languages[0] : 'it'),
+          sourceName: item.sourceName || provider.name,
+          language: item.language || (lang && lang !== 'all' ? lang : (provider.languages[0] !== 'all' ? provider.languages[0] : 'it')),
           audio: item.audio || 'both'
         }));
       } catch (err) {
@@ -328,13 +354,13 @@ class ProviderManager {
     });
 
     const settled = await Promise.allSettled(searchPromises);
-    const results = [];
+    const arrays = [];
     for (const res of settled) {
-      if (res.status === 'fulfilled' && Array.isArray(res.value)) {
-        results.push(...res.value);
+      if (res.status === 'fulfilled' && Array.isArray(res.value) && res.value.length > 0) {
+        arrays.push(res.value);
       }
     }
-    return results;
+    return this.interleaveArrays(arrays);
   }
 
   /**
@@ -344,17 +370,7 @@ class ProviderManager {
     let providers = this.getMangaProviders();
 
     if (sourceFilter) {
-      const cleanFilter = String(sourceFilter).toLowerCase().trim();
-      providers = providers.filter(p => 
-        p.id.toLowerCase() === cleanFilter || 
-        p.name.toLowerCase().includes(cleanFilter)
-      );
-    } else if (lang) {
-      const cleanLang = lang.toLowerCase();
-      providers = providers.filter(p => {
-        if (cleanLang === 'all') return true;
-        return p.languages.includes(cleanLang) || p.languages.includes('all');
-      });
+      providers = providers.filter(p => this.matchesSource(p, sourceFilter));
     }
 
     if (providers.length === 0) {
@@ -374,8 +390,8 @@ class ProviderManager {
           ...item,
           type: 'manga',
           source: item.source || provider.id,
-          sourceName: provider.name,
-          language: item.language || lang || (provider.languages[0] !== 'all' ? provider.languages[0] : 'en')
+          sourceName: item.sourceName || provider.name,
+          language: item.language || (lang && lang !== 'all' ? lang : (provider.languages[0] !== 'all' ? provider.languages[0] : 'en'))
         }));
       } catch (err) {
         return [];
@@ -383,13 +399,13 @@ class ProviderManager {
     });
 
     const settled = await Promise.allSettled(promises);
-    const results = [];
+    const arrays = [];
     for (const res of settled) {
-      if (res.status === 'fulfilled' && Array.isArray(res.value)) {
-        results.push(...res.value);
+      if (res.status === 'fulfilled' && Array.isArray(res.value) && res.value.length > 0) {
+        arrays.push(res.value);
       }
     }
-    return results;
+    return this.interleaveArrays(arrays);
   }
 
   /**
@@ -399,17 +415,7 @@ class ProviderManager {
     let providers = this.getAnimeProviders();
 
     if (sourceFilter) {
-      const cleanFilter = String(sourceFilter).toLowerCase().trim();
-      providers = providers.filter(p => 
-        p.id.toLowerCase() === cleanFilter || 
-        p.name.toLowerCase().includes(cleanFilter)
-      );
-    } else if (lang) {
-      const cleanLang = lang.toLowerCase();
-      providers = providers.filter(p => {
-        if (cleanLang === 'all') return true;
-        return p.languages.includes(cleanLang) || p.languages.includes('all');
-      });
+      providers = providers.filter(p => this.matchesSource(p, sourceFilter));
     }
 
     if (providers.length === 0) {
@@ -429,8 +435,9 @@ class ProviderManager {
           ...item,
           type: 'anime',
           source: item.source || provider.id,
-          sourceName: provider.name,
-          language: item.language || lang || (provider.languages[0] !== 'all' ? provider.languages[0] : 'it')
+          sourceName: item.sourceName || provider.name,
+          language: item.language || (lang && lang !== 'all' ? lang : (provider.languages[0] !== 'all' ? provider.languages[0] : 'it')),
+          audio: item.audio || 'both'
         }));
       } catch (err) {
         return [];
@@ -438,13 +445,13 @@ class ProviderManager {
     });
 
     const settled = await Promise.allSettled(promises);
-    const results = [];
+    const arrays = [];
     for (const res of settled) {
-      if (res.status === 'fulfilled' && Array.isArray(res.value)) {
-        results.push(...res.value);
+      if (res.status === 'fulfilled' && Array.isArray(res.value) && res.value.length > 0) {
+        arrays.push(res.value);
       }
     }
-    return results;
+    return this.interleaveArrays(arrays);
   }
 
   /**
@@ -454,11 +461,9 @@ class ProviderManager {
   async getFullCatalog({ type = 'all', source = null, lang = null } = {}) {
     const catalog = { manga: [], anime: [] };
 
-    // If a source is specified and type is 'all', check which type(s) this source belongs to
     if (source && type === 'all') {
-      const cleanSource = String(source).toLowerCase().trim();
-      const hasManga = this.getMangaProviders().some(p => p.id.toLowerCase() === cleanSource || p.name.toLowerCase().includes(cleanSource));
-      const hasAnime = this.getAnimeProviders().some(p => p.id.toLowerCase() === cleanSource || p.name.toLowerCase().includes(cleanSource));
+      const hasManga = this.getMangaProviders().some(p => this.matchesSource(p, source));
+      const hasAnime = this.getAnimeProviders().some(p => this.matchesSource(p, source));
 
       if (hasManga && !hasAnime) {
         catalog.manga = await this.getMangaCatalog(source, lang);

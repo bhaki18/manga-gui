@@ -117,5 +117,7 @@ module.exports = {
   fetchJson,
   checkUrlExists,
   downloadToFile,
+  getCurlBinary,
+  DOH_RESOLVER,
   DEFAULT_USER_AGENT
 };

@@ -65,9 +65,11 @@ program
   // Direct selection
   .option('-e, --episode <number>', 'Direct episode number to stream or download')
   .option('-C, --chapter <number>', 'Direct chapter number to read or download')
+  .option('-u, --url <url>', 'Direct anime or manga URL to open without re-searching by title')
   // Actions
   .option('-d, --download [dir]', 'Download chapter pages or anime episode .mp4 for offline viewing')
   .option('-g, --get-url', 'Print direct streaming URL or page URLs to stdout and exit (script-friendly)')
+  .option('--json', 'Output catalog or search results as JSON (GUI-friendly)')
   .option('-H, --history', 'Display read/watched history with interactive resume')
   .option('-r, --random', 'Pick and open a random manga or anime title')
   .option('-i, --info', 'Display title metadata and total chapters/episodes without opening player')
@@ -288,8 +290,8 @@ program
         process.exit(0);
       }
 
-      // Banner (suppressed in script-friendly get-url mode)
-      if (!options.getUrl) {
+      // Banner (suppressed in script-friendly get-url or json mode)
+      if (!options.getUrl && !options.json) {
         console.log(chalk.bold.cyan('\n  📖 MANGA-CLI 2.0 - Universal Terminal Manga & Anime Hub 🎬\n'));
       }
 
@@ -321,7 +323,7 @@ program
 
       // If still no mode determined, prompt interactively (or check options)
       if (!mode) {
-        if (options.getUrl || options.info || options.list) {
+        if (options.getUrl || options.info || options.list || options.json) {
           // Default to manga if not specified
           mode = 'manga';
         } else if (query) {
@@ -371,7 +373,7 @@ program
         await handleMangaFlow(query, options);
       }
 
-      if (!options.getUrl) {
+      if (!options.getUrl && !options.json) {
         console.log(chalk.cyan('\nThank you for using manga-cli! See you next time. 👋'));
       }
     } catch (err) {
@@ -675,6 +677,23 @@ async function handleCatalogCommand(options) {
   let type = 'all';
   if (options.anime && !options.manga) type = 'anime';
   else if (options.manga && !options.anime) type = 'manga';
+
+  if (options.json) {
+    try {
+      const catalog = await providerManager.getFullCatalog({
+        type,
+        source: options.source,
+        lang: options.lang
+      });
+      const payload = type === 'anime'
+        ? (catalog.anime || [])
+        : (type === 'manga' ? (catalog.manga || []) : catalog);
+      console.log(JSON.stringify(payload));
+    } catch (err) {
+      console.log('[]');
+    }
+    return;
+  }
 
   let typeDesc = 'completo (Manga & Anime)';
   if (type === 'anime') typeDesc = 'Anime';
@@ -997,6 +1016,18 @@ async function handleAnimeFlow(query, options) {
   let selectedLang = options.lang ? options.lang.toLowerCase() : null;
   let chosenAnimeProvider = providerManager.getAnimeProvider(options.source);
 
+  if (!selectedAnime && options.url && options.url.startsWith('http') && !options.list && !options.json) {
+    const inferredSource = options.source ||
+      (options.url.includes('animeworld') ? 'animeworld' : 'onepiecepower-anime');
+    selectedAnime = {
+      title: query || options.url,
+      url: options.url,
+      source: inferredSource,
+      language: selectedLang || 'it',
+      audio: options.dub ? 'ita' : (options.sub ? 'subita' : 'both')
+    };
+  }
+
   if (selectedAnime && selectedAnime.language && !selectedLang) {
     selectedLang = selectedAnime.language;
   }
@@ -1021,7 +1052,7 @@ async function handleAnimeFlow(query, options) {
     const lastAnime = getLastWatchedAnime();
     const animeUrl = lastAnime ? (lastAnime.url || lastAnime.animeKey) : null;
     if (lastAnime && animeUrl) {
-      if (!options.getUrl) {
+      if (!options.getUrl && !options.json) {
         console.log(chalk.cyan(`🎬 [Auto-Resume] Found last watched anime: ${chalk.bold(lastAnime.title)}`));
       }
       selectedAnime = {
@@ -1031,7 +1062,7 @@ async function handleAnimeFlow(query, options) {
         language: lastAnime.language || 'it',
         audio: lastAnime.audio || 'both'
       };
-    } else if (!options.getUrl) {
+    } else if (!options.getUrl && !options.json) {
       console.log(chalk.yellow('ℹ️ No previous anime found in history to resume from.\n'));
     }
   }
@@ -1052,9 +1083,14 @@ async function handleAnimeFlow(query, options) {
     }
 
     const sourceLabel = options.source ? ` [${options.source}]` : '';
-    const spinner = !options.getUrl ? ora(`Searching anime catalog for "${searchQuery}"${sourceLabel}...`).start() : null;
+    const spinner = (!options.getUrl && !options.json) ? ora(`Searching anime catalog for "${searchQuery}"${sourceLabel}...`).start() : null;
     const results = await providerManager.searchAnime(searchQuery, selectedLang, options.source);
     if (spinner) spinner.stop();
+
+    if (options.json) {
+      console.log(JSON.stringify(results || []));
+      return;
+    }
 
     if (results.length === 0) {
       console.log(chalk.red(`❌ No anime found matching "${searchQuery}".`));
@@ -1069,8 +1105,8 @@ async function handleAnimeFlow(query, options) {
     }
 
     if (options.getUrl || options.info || options.episode) {
-      // Pick exact or first result if non-interactive
-      selectedAnime = results[0];
+      const cleanQ = (searchQuery || '').toLowerCase().trim();
+      selectedAnime = results.find(r => r.title && r.title.toLowerCase().trim() === cleanQ) || results[0];
     } else {
       const animeChoices = results.slice(0, 50).map(a => {
         let badge = chalk.cyan(`[${a.sourceName || a.source || 'Anime'}]`);
@@ -1105,7 +1141,7 @@ async function handleAnimeFlow(query, options) {
 
   // Ensure valid URL
   if (!selectedAnime.url || !selectedAnime.url.startsWith('http')) {
-    const searchRes = await providerManager.searchAnime(selectedAnime.title || selectedAnime.url, selectedLang);
+    const searchRes = await providerManager.searchAnime(selectedAnime.title || selectedAnime.url, selectedLang, options.source);
     if (searchRes && searchRes.length > 0) {
       selectedAnime.url = searchRes[0].url;
       selectedAnime.title = searchRes[0].title;
@@ -1143,12 +1179,26 @@ async function handleAnimeFlow(query, options) {
     preferredAudio = audioAnswer.audio;
   }
 
-  // 5. Fetch episodes
+  // 5. Fetch episodes (with automatic fallback across anime providers if empty)
   const spinner = !options.getUrl ? ora(`Loading episodes for ${selectedAnime.title}...`).start() : null;
-  const episodes = await chosenAnimeProvider.getEpisodes(selectedAnime.url);
+  let episodes = await chosenAnimeProvider.getEpisodes(selectedAnime.url);
+  if ((!episodes || episodes.length === 0) && selectedAnime.title) {
+    const altResults = await providerManager.searchAnime(selectedAnime.title, selectedLang);
+    for (const alt of altResults) {
+      if (alt.url === selectedAnime.url) continue;
+      const altProv = providerManager.getAnimeProvider(alt.source);
+      const altEps = await altProv.getEpisodes(alt.url);
+      if (altEps && altEps.length > 0) {
+        selectedAnime = alt;
+        chosenAnimeProvider = altProv;
+        episodes = altEps;
+        break;
+      }
+    }
+  }
   if (spinner) spinner.stop();
 
-  if (episodes.length === 0) {
+  if (!episodes || episodes.length === 0) {
     console.log(chalk.red('❌ No episodes available for this anime series.'));
     process.exit(0);
   }
@@ -1170,21 +1220,64 @@ async function handleAnimeFlow(query, options) {
   // 6. Direct episode selection via -e / --episode
   if (options.episode) {
     const targetNum = String(options.episode).trim();
-    const foundEp = episodes.find(e => {
-      const eNum = String(e.id || '').trim();
-      return eNum === targetNum || e.title.startsWith(targetNum) || e.title.includes(` ${targetNum} `) || e.title.startsWith(`0${targetNum}`) || e.title.startsWith(`00${targetNum}`);
+    const cleanTargetNum = targetNum.replace(/^0+/, '') || '0';
+
+    // Pass 1: exact match on id
+    let foundEp = episodes.find(e => {
+      const eNum = String(e.id || '').trim().replace(/^0+/, '') || '0';
+      return eNum === cleanTargetNum;
     });
+
+    // Pass 2: match Episodio N / Episode N in title
+    if (!foundEp) {
+      foundEp = episodes.find(e => {
+        const m = String(e.title || '').match(/(?:episodio|episode|ep\.?|\b)0*(\d+)\b/i);
+        return m && m[1] === cleanTargetNum;
+      });
+    }
+
+    // Pass 3: 1-based index fallback
+    if (!foundEp) {
+      const idx = parseInt(targetNum, 10) - 1;
+      if (!isNaN(idx) && idx >= 0 && idx < episodes.length) {
+        foundEp = episodes[idx];
+      }
+    }
 
     if (!foundEp) {
       console.log(chalk.red(`❌ Episode "${targetNum}" not found for this anime.`));
       process.exit(1);
     }
 
-    const streamData = await chosenAnimeProvider.getEpisodeStream(foundEp.url, preferredAudio);
+    let streamData = await chosenAnimeProvider.getEpisodeStream(foundEp.url, preferredAudio);
+
+    // Fallback to other anime providers if stream extraction failed
+    if ((!streamData || !streamData.streamUrl) && selectedAnime.title) {
+      const altResults = await providerManager.searchAnime(selectedAnime.title, selectedLang);
+      for (const alt of altResults) {
+        if (alt.url === selectedAnime.url) continue;
+        const altProv = providerManager.getAnimeProvider(alt.source);
+        const altEps = await altProv.getEpisodes(alt.url);
+        const altEp = altEps.find(e => (String(e.id || '').trim().replace(/^0+/, '') || '0') === cleanTargetNum) ||
+                      altEps[parseInt(targetNum, 10) - 1];
+        if (altEp) {
+          const altStream = await altProv.getEpisodeStream(altEp.url, preferredAudio);
+          if (altStream && altStream.streamUrl) {
+            streamData = altStream;
+            chosenAnimeProvider = altProv;
+            foundEp = altEp;
+            break;
+          }
+        }
+      }
+    }
+
     if (!streamData || !streamData.streamUrl) {
       console.log(chalk.red(`❌ Unable to extract video stream for episode ${targetNum}.`));
       process.exit(1);
     }
+
+    markEpisodeWatched(animeKey, selectedAnime.title, foundEp, selectedAnime);
 
     if (options.getUrl) {
       console.log(streamData.streamUrl);
@@ -1204,7 +1297,6 @@ async function handleAnimeFlow(query, options) {
       player: options.player,
       fullscreen: options.fullscreen
     });
-    markEpisodeWatched(animeKey, selectedAnime.title, foundEp, selectedAnime);
     process.exit(0);
   }
 
@@ -1373,6 +1465,18 @@ async function handleMangaFlow(query, options) {
   let selectedManga = options.resumeItem ? { ...options.resumeItem } : null;
   let chosenProvider = providerManager.getMangaProvider(options.source);
 
+  if (!selectedManga && options.url && options.url.startsWith('http') && !options.list && !options.json) {
+    const inferredSource = options.source ||
+      (options.url.includes('mangadex') ? 'mangadex' :
+      (options.url.includes('mangapill') ? 'mangapill' : 'onepiecepower'));
+    selectedManga = {
+      title: query || options.url,
+      url: options.url,
+      source: inferredSource,
+      language: selectedLang || 'all'
+    };
+  }
+
   if (selectedManga && selectedManga.language && !selectedLang) {
     selectedLang = selectedManga.language;
   }
@@ -1416,7 +1520,7 @@ async function handleMangaFlow(query, options) {
 
   // 3. Select language and manga if not resuming
   if (!selectedManga) {
-    if (!selectedLang && !options.getUrl) {
+    if (!selectedLang && !options.getUrl && !options.info && !options.list && !options.json && !options.chapter && !options.download) {
       const langChoices = [
         { name: '🇮🇹 Italian (Italiano)', value: 'it' },
         { name: '🇬🇧 English', value: 'en' },
@@ -1449,7 +1553,7 @@ async function handleMangaFlow(query, options) {
       ]);
       selectedLang = langAnswer.language;
     } else if (!selectedLang) {
-      selectedLang = 'it';
+      selectedLang = 'all';
     }
 
     let searchQuery = query;
@@ -1465,12 +1569,17 @@ async function handleMangaFlow(query, options) {
       searchQuery = inputAnswer.query;
     }
 
-    const langLabel = (selectedLang || 'IT').toUpperCase();
+    const langLabel = (selectedLang || 'ALL').toUpperCase();
     const sourceLabel = options.source ? ` [${options.source}]` : '';
-    const spinner = !options.getUrl ? ora(`Searching manga for "${searchQuery}" [${langLabel}]${sourceLabel}...`).start() : null;
+    const spinner = (!options.getUrl && !options.json) ? ora(`Searching manga for "${searchQuery}" [${langLabel}]${sourceLabel}...`).start() : null;
 
     let results = await providerManager.searchManga(searchQuery, selectedLang, options.source);
     if (spinner) spinner.stop();
+
+    if (options.json && (options.list || (!options.info && !options.chapter && !options.getUrl && !options.download))) {
+      console.log(JSON.stringify(results || []));
+      return;
+    }
 
     if (results.length === 0) {
       console.log(chalk.red(`❌ No manga found for "${searchQuery}" in language [${selectedLang}].`));
@@ -1484,8 +1593,10 @@ async function handleMangaFlow(query, options) {
       return;
     }
 
-    if (options.getUrl || options.info || options.chapter) {
-      selectedManga = results[0];
+    if (options.getUrl || options.info || options.chapter || options.download) {
+      const cleanQ = (searchQuery || '').toLowerCase().trim();
+      const exactMatch = results.find(r => (r.title || '').toLowerCase().trim() === cleanQ || (r.altTitle || '').toLowerCase().trim() === cleanQ);
+      selectedManga = exactMatch || results[0];
     } else {
       const mangaChoices = results.slice(0, 50).map(m => {
         const flag = getLanguageFlag(m.language || selectedLang);
@@ -1524,7 +1635,7 @@ async function handleMangaFlow(query, options) {
 
   // Ensure valid URL
   if (!selectedManga.url || !selectedManga.url.startsWith('http')) {
-    const searchRes = await providerManager.searchManga(selectedManga.title || selectedManga.url, selectedLang || 'it');
+    const searchRes = await providerManager.searchManga(selectedManga.title || selectedManga.url, selectedLang || 'all', options.source || selectedManga.source);
     if (searchRes && searchRes.length > 0) {
       selectedManga.url = searchRes[0].url;
       selectedManga.title = searchRes[0].title;
@@ -1537,8 +1648,39 @@ async function handleMangaFlow(query, options) {
 
   // 4. Fetch chapters
   const spinner = !options.getUrl ? ora(`Loading chapters for ${selectedManga.title}...`).start() : null;
-  const chapters = await chosenProvider.getChapters(selectedManga.url, selectedLang);
+  let chapters = await chosenProvider.getChapters(selectedManga.url, selectedLang);
   if (spinner) spinner.stop();
+
+  // If no chapters found on chosenProvider (e.g. DMCA'd manga on MangaDex), try fallback manga providers
+  if (chapters.length === 0 && selectedManga.title) {
+    const fallbackProviders = providerManager.getMangaProviders().filter(p => p.id !== chosenProvider.id);
+    const queriesToTry = [selectedManga.title, selectedManga.altTitle].filter(Boolean);
+    for (const fbProv of fallbackProviders) {
+      let foundFallback = false;
+      for (const qTry of queriesToTry) {
+        try {
+          const fbResults = await fbProv.search(qTry, 'all');
+          if (fbResults && fbResults.length > 0) {
+            const cleanTitle = qTry.toLowerCase().trim();
+            const bestMatch = fbResults.find(r => (r.title || '').toLowerCase().trim() === cleanTitle) || fbResults[0];
+            const fbChapters = await fbProv.getChapters(bestMatch.url, 'all');
+            if (fbChapters && fbChapters.length > 0) {
+              chapters = fbChapters;
+              chosenProvider = fbProv;
+              selectedManga.url = bestMatch.url;
+              selectedManga.source = fbProv.id;
+              selectedManga.sourceName = fbProv.name;
+              foundFallback = true;
+              break;
+            }
+          }
+        } catch (err) {
+          // ignore fallback error
+        }
+      }
+      if (foundFallback) break;
+    }
+  }
 
   if (chapters.length === 0) {
     console.log(chalk.red('❌ No chapters available for this manga in the selected language.'));
@@ -1563,33 +1705,31 @@ async function handleMangaFlow(query, options) {
   // 5. Direct chapter selection via -C / --chapter
   if (options.chapter) {
     const targetCh = String(options.chapter).trim();
-    const cleanTargetCh = targetCh.replace(/^0+/, '');
-    // Prefer readable chapter (not external link)
+    const cleanTargetCh = targetCh.replace(/^0+/, '') || '0';
+
+    // Pass 1: exact match on c.number or c.id (non-external)
     let foundCh = chapters.find(c => {
       if (c.externalUrl) return false;
-      const cNum = String(c.number || c.id || '').trim();
-      const cleanNum = cNum.replace(/^0+/, '');
-      if (cNum === targetCh || (cleanNum && cleanNum === cleanTargetCh)) return true;
-      if (c.title.includes(` ${targetCh} `) || c.title.includes(` 0${targetCh} `) || c.title.includes(` 00${targetCh} `)) return true;
-      if (c.title.includes(`Capitolo ${targetCh}`) || c.title.includes(`Capitolo 0${targetCh}`) || c.title.includes(`Capitolo 00${targetCh}`)) return true;
-      if (c.title.includes(`Chapter ${targetCh}`) || c.title.includes(`Chapter 0${targetCh}`) || c.title.includes(`Chapter 00${targetCh}`)) return true;
-      const m = c.title.match(/(?:capitolo|chapter|ch\.?|\b)0*(\d+)/i);
-      if (m && m[1] === cleanTargetCh) return true;
-      return false;
+      const cNum = String(c.number !== undefined ? c.number : (c.id || '')).trim();
+      const cleanNum = cNum.replace(/^0+/, '') || '0';
+      return cNum === targetCh || cleanNum === cleanTargetCh;
     });
 
+    // Pass 2: explicit Chapter / Capitolo number in title (non-external)
     if (!foundCh) {
       foundCh = chapters.find(c => {
-        const cNum = String(c.number || c.id || '').trim();
-        const cleanNum = cNum.replace(/^0+/, '');
-        if (cNum === targetCh || (cleanNum && cleanNum === cleanTargetCh)) return true;
-        if (c.title.includes(` ${targetCh} `) || c.title.includes(` 0${targetCh} `) || c.title.includes(` 00${targetCh} `)) return true;
-        if (c.title.includes(`Capitolo ${targetCh}`) || c.title.includes(`Capitolo 0${targetCh}`) || c.title.includes(`Capitolo 00${targetCh}`)) return true;
-        if (c.title.includes(`Chapter ${targetCh}`) || c.title.includes(`Chapter 0${targetCh}`) || c.title.includes(`Chapter 00${targetCh}`)) return true;
-        const m = c.title.match(/(?:capitolo|chapter|ch\.?|\b)0*(\d+)/i);
-        if (m && m[1] === cleanTargetCh) return true;
-        return false;
+        if (c.externalUrl) return false;
+        const m = (c.title || '').match(/(?:capitolo|chapter|ch\.?)\s*0*(\d+(?:\.\d+)?)\b/i);
+        return m && m[1] === cleanTargetCh;
       });
+    }
+
+    // Pass 3: 1-based index fallback
+    if (!foundCh) {
+      const idx = parseInt(targetCh, 10) - 1;
+      if (!isNaN(idx) && idx >= 0 && idx < chapters.length) {
+        foundCh = chapters[idx];
+      }
     }
 
     if (!foundCh) {
@@ -1597,13 +1737,52 @@ async function handleMangaFlow(query, options) {
       process.exit(1);
     }
 
-    const chapterData = await chosenProvider.getChapterPages(foundCh.url);
+    let chapterData = await chosenProvider.getChapterPages(foundCh.url);
     let pagesList = chapterData.pages || [];
     if (pagesList.length === 0 && typeof chapterData.discoverRemainingPages === 'function') {
       pagesList = await chapterData.discoverRemainingPages();
     } else if (pagesList.length === 0 && chapterData.page1) {
       pagesList = [chapterData.page1];
     }
+
+    // Fallback to other manga providers if pagesList is empty
+    if (pagesList.length === 0 && selectedManga.title) {
+      const fallbackProviders = providerManager.getMangaProviders().filter(p => p.id !== chosenProvider.id);
+      for (const fbProv of fallbackProviders) {
+        try {
+          const fbResults = await fbProv.search(selectedManga.title, 'all');
+          if (fbResults && fbResults.length > 0) {
+            const fbChapters = await fbProv.getChapters(fbResults[0].url, 'all');
+            const fbCh = fbChapters.find(c => {
+              const cNum = String(c.number !== undefined ? c.number : (c.id || '')).trim();
+              const cleanNum = cNum.replace(/^0+/, '') || '0';
+              if (cNum === targetCh || cleanNum === cleanTargetCh) return true;
+              const m = (c.title || '').match(/(?:capitolo|chapter|ch\.?)\s*0*(\d+(?:\.\d+)?)\b/i);
+              return m && m[1] === cleanTargetCh;
+            }) || fbChapters[parseInt(targetCh, 10) - 1];
+            if (fbCh) {
+              const fbData = await fbProv.getChapterPages(fbCh.url);
+              let fbPages = fbData.pages || [];
+              if (fbPages.length === 0 && typeof fbData.discoverRemainingPages === 'function') {
+                fbPages = await fbData.discoverRemainingPages();
+              } else if (fbPages.length === 0 && fbData.page1) {
+                fbPages = [fbData.page1];
+              }
+              if (fbPages.length > 0) {
+                pagesList = fbPages;
+                chapterData = fbData;
+                foundCh = fbCh;
+                break;
+              }
+            }
+          }
+        } catch (err) {
+          // ignore
+        }
+      }
+    }
+
+    markChapterRead(mangaKey, selectedManga.title, foundCh, selectedManga);
 
     if (options.getUrl) {
       pagesList.forEach(p => console.log(p));
@@ -1621,7 +1800,6 @@ async function handleMangaFlow(query, options) {
       viewer: options.viewer,
       fullscreen: options.fullscreen
     });
-    markChapterRead(mangaKey, selectedManga.title, foundCh, selectedManga);
     process.exit(0);
   }
 

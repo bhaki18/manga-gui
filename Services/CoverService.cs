@@ -129,38 +129,49 @@ public class CoverService
                 if (doc.RootElement.TryGetProperty("data", out var data) && 
                     data.ValueKind == JsonValueKind.Array)
                 {
+                    string? firstPosterUrl = null;
                     foreach (var item in data.EnumerateArray())
                     {
                         if (item.TryGetProperty("attributes", out var attrs))
                         {
-                            var canonical = attrs.TryGetProperty("canonicalTitle", out var ct) ? ct.GetString() : null;
-                            string? enTitle = null;
-                            string? enJpTitle = null;
-                            if (attrs.TryGetProperty("titles", out var titlesObj) && titlesObj.ValueKind == JsonValueKind.Object)
-                            {
-                                if (titlesObj.TryGetProperty("en", out var en)) enTitle = en.GetString();
-                                if (titlesObj.TryGetProperty("en_jp", out var enjp)) enJpTitle = enjp.GetString();
-                            }
-
-                            bool matched = IsTitleMatch(cleanTitle, canonical) ||
-                                           IsTitleMatch(cleanTitle, enTitle) ||
-                                           IsTitleMatch(cleanTitle, enJpTitle);
-
-                            if (!matched) continue;
-
+                            string? itemPosterUrl = null;
                             if (attrs.TryGetProperty("posterImage", out var poster) &&
                                 poster.ValueKind == JsonValueKind.Object)
                             {
-                                var posterUrl = poster.TryGetProperty("medium", out var m) ? m.GetString() :
+                                itemPosterUrl = poster.TryGetProperty("medium", out var m) ? m.GetString() :
                                                 poster.TryGetProperty("small", out var s) ? s.GetString() :
                                                 poster.TryGetProperty("original", out var o) ? o.GetString() : null;
-
-                                if (!string.IsNullOrWhiteSpace(posterUrl))
+                                if (firstPosterUrl == null && !string.IsNullOrWhiteSpace(itemPosterUrl))
                                 {
-                                    return posterUrl;
+                                    firstPosterUrl = itemPosterUrl;
                                 }
                             }
+
+                            var canonical = attrs.TryGetProperty("canonicalTitle", out var ct) ? ct.GetString() : null;
+                            bool matched = IsTitleMatch(cleanTitle, canonical);
+
+                            if (!matched && attrs.TryGetProperty("titles", out var titlesObj) && titlesObj.ValueKind == JsonValueKind.Object)
+                            {
+                                foreach (var prop in titlesObj.EnumerateObject())
+                                {
+                                    if (prop.Value.ValueKind == JsonValueKind.String && IsTitleMatch(cleanTitle, prop.Value.GetString()))
+                                    {
+                                        matched = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (matched && !string.IsNullOrWhiteSpace(itemPosterUrl))
+                            {
+                                return itemPosterUrl;
+                            }
                         }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(firstPosterUrl))
+                    {
+                        return firstPosterUrl;
                     }
                 }
             }

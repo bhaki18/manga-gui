@@ -4,25 +4,63 @@ const { fetchHtml } = require('../utils/http');
 
 class MangapillProvider extends BaseProvider {
   constructor() {
-    super('Mangapill (Global Free English)', 'https://mangapill.com', {
+    super('Mangapill', 'https://mangapill.com', {
       id: 'mangapill',
       type: 'manga',
-      languages: ['en'],
+      languages: ['en', 'all'],
       isBuiltIn: true
     });
     this.id = 'mangapill';
     this.type = 'manga';
-    this.languages = ['en'];
+    this.languages = ['en', 'all'];
     this.isBuiltIn = true;
+    this.catalogCache = null;
+  }
+
+  _parseMangaCards($, results, seenUrls) {
+    $('a[href^="/manga/"]').each((_, el) => {
+      const href = $(el).attr('href');
+      if (!href || !href.startsWith('/manga/')) return;
+      const fullUrl = `${this.baseUrl}${href}`;
+      if (seenUrls.has(fullUrl)) return;
+
+      let title = $(el).find('.font-black, .font-bold').first().text().trim();
+      if (!title) {
+        const rawText = $(el).text().trim();
+        if (!rawText || rawText.startsWith('#')) return;
+        title = rawText.split('\n')[0].trim();
+      }
+      if (!title || title.startsWith('#')) return;
+
+      const card = $(el).parent();
+      const altTitle = $(el).find('.text-xs.text-secondary').first().text().trim() ||
+                       card.find('.text-xs.text-secondary').first().text().trim();
+      const badgeTexts = card.find('.flex.flex-wrap div')
+        .map((__, b) => $(b).text().trim())
+        .get()
+        .filter(Boolean);
+      const genres = badgeTexts.length > 0 ? badgeTexts.join(', ') : altTitle;
+
+      seenUrls.add(fullUrl);
+      results.push({
+        id: href,
+        title,
+        altTitle: altTitle || '',
+        url: fullUrl,
+        genres: genres || '',
+        source: 'mangapill',
+        sourceName: 'Mangapill',
+        language: 'en'
+      });
+    });
   }
 
   /**
    * Search manga on Mangapill
    */
   async search(query, lang = null) {
-    // Mangapill is English-only, so skip if searching strictly for another non-English language
-    if (lang && lang !== 'en' && lang !== 'all') {
-      return [];
+    if (!query || !query.trim()) {
+      return this.getCatalog();
     }
 
     try {
@@ -30,23 +68,15 @@ class MangapillProvider extends BaseProvider {
       const html = await fetchHtml(`${this.baseUrl}/search?q=${cleanQuery}`);
       const $ = cheerio.load(html);
       const results = [];
+      const seenUrls = new Set();
 
-      $('div.flex.flex-col.justify-end').each((_, el) => {
-        const a = $(el).find('a').first();
-        const href = a.attr('href');
-        const title = $(el).find('.font-black').text().trim();
-        const genres = $(el).find('.text-xs').map((_, b) => $(b).text().trim()).get().join(', ');
+      this._parseMangaCards($, results, seenUrls);
 
-        if (href && title) {
-          results.push({
-            id: href,
-            title,
-            url: href.startsWith('http') ? href : `${this.baseUrl}${href}`,
-            genres,
-            source: 'mangapill',
-            language: 'en'
-          });
-        }
+      // Sort non-novel manga before light novels when searching
+      results.sort((a, b) => {
+        const aNovel = a.title.toLowerCase().includes('novel') ? 1 : 0;
+        const bNovel = b.title.toLowerCase().includes('novel') ? 1 : 0;
+        return aNovel - bNovel;
       });
 
       return results;
@@ -56,32 +86,35 @@ class MangapillProvider extends BaseProvider {
   }
 
   /**
-   * Fetch recent/featured catalog from Mangapill
+   * Fetch featured & recent catalog from Mangapill
    */
   async getCatalog() {
+    if (this.catalogCache && this.catalogCache.length > 0) {
+      return this.catalogCache;
+    }
+
+    const results = [];
+    const seenUrls = new Set();
+
     try {
-      const html = await fetchHtml(`${this.baseUrl}/mangas/new`);
-      const $ = cheerio.load(html);
-      const results = [];
-      $('div.flex.flex-col.justify-end').each((_, el) => {
-        const a = $(el).find('a').first();
-        const href = a.attr('href');
-        const title = $(el).find('.font-black').text().trim();
-        const sub = $(el).find('.text-xs').text().trim();
-        if (href && title) {
-          results.push({
-            id: href,
-            title,
-            url: href.startsWith('http') ? href : `${this.baseUrl}${href}`,
-            genres: sub,
-            source: 'mangapill',
-            language: 'en'
-          });
-        }
-      });
+      const [homeHtml, newHtml] = await Promise.all([
+        fetchHtml(`${this.baseUrl}/`).catch(() => ''),
+        fetchHtml(`${this.baseUrl}/mangas/new`).catch(() => '')
+      ]);
+
+      if (homeHtml) {
+        this._parseMangaCards(cheerio.load(homeHtml), results, seenUrls);
+      }
+      if (newHtml) {
+        this._parseMangaCards(cheerio.load(newHtml), results, seenUrls);
+      }
+
+      if (results.length > 0) {
+        this.catalogCache = results;
+      }
       return results;
     } catch (err) {
-      return [];
+      return results;
     }
   }
 
@@ -89,25 +122,32 @@ class MangapillProvider extends BaseProvider {
    * Get all chapters for a manga
    */
   async getChapters(mangaUrl, lang = null) {
-    const html = await fetchHtml(mangaUrl);
-    const $ = cheerio.load(html);
-    const chapters = [];
+    try {
+      const html = await fetchHtml(mangaUrl);
+      const $ = cheerio.load(html);
+      const chapters = [];
 
-    $('a[href*="/chapters/"]').each((_, el) => {
-      const href = $(el).attr('href');
-      const title = $(el).text().trim();
+      $('a[href*="/chapters/"]').each((_, el) => {
+        const href = $(el).attr('href');
+        const title = $(el).text().trim();
 
-      if (href) {
-        chapters.push({
-          id: href.split('/chapters/')[1],
-          title: `[EN] ${title}`,
-          url: href.startsWith('http') ? href : `${this.baseUrl}${href}`
-        });
-      }
-    });
+        if (href) {
+          const numMatch = title.match(/(?:chapter|ch\.?)\s*(\d+(?:\.\d+)?)/i) || title.match(/(\d+(?:\.\d+)?)/);
+          const chapNum = numMatch ? numMatch[1] : undefined;
+          chapters.push({
+            id: chapNum || href.split('/chapters/')[1],
+            number: chapNum,
+            title: `[EN] ${title}`,
+            url: href.startsWith('http') ? href : `${this.baseUrl}${href}`
+          });
+        }
+      });
 
-    // Invert order so Chapter 1 comes first
-    return chapters.reverse();
+      // Invert order so Chapter 1 comes first
+      return chapters.reverse();
+    } catch (err) {
+      return [];
+    }
   }
 
   /**

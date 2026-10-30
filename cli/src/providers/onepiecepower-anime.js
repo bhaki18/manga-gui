@@ -2,6 +2,18 @@ const cheerio = require('cheerio');
 const BaseProvider = require('./base');
 const { fetchHtml } = require('../utils/http');
 
+const POPULAR_ANIME_KEYWORDS = [
+  'one piece', 'naruto', 'bleach', 'dragon ball', 'attack on titan',
+  'shingeki no kyojin', 'jujutsu kaisen', 'demon slayer', 'kimetsu no yaiba',
+  'chainsaw man', 'solo leveling', 'my hero academia', 'hunter x hunter',
+  'death note', 'fullmetal alchemist', 'black clover', 'tokyo ghoul',
+  'sword art online', 'code geass', 'steins', 'evangelion', 'cowboy bebop',
+  'frieren', 'dandadan', 'blue lock', 'vinland saga', 'spy x family',
+  'one punch man', 'mob psycho', 'dr. stone', 'fire force', 'fairy tail',
+  'tokyo revengers', 'haikyuu', 'overlord', 're:zero', 'konosuba', 'gintama',
+  'monster', 'parasyte', 'cyberpunk', 'devilman', 'hellsing', 'berserk'
+];
+
 class OnePiecePowerAnimeProvider extends BaseProvider {
   constructor() {
     super('One Piece Power Anime', 'https://onepiecepower.com', {
@@ -20,7 +32,7 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
   /**
    * Fetches and caches the complete anime catalog from /anime18/lista-anime2
    */
-  async getCatalog() {
+  async getAllAnime() {
     if (this.animeListCache) {
       return this.animeListCache;
     }
@@ -31,40 +43,52 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
 
     // 1. One Piece main anime entries
     list.push({
+      id: 'onepiece-subita',
       title: 'One Piece (Sub ITA)',
       url: `${this.baseUrl}/anime18/onepiece/subita2/lista-episodi`,
       language: 'it',
       audio: 'subita',
-      source: 'onepiecepower'
+      source: 'onepiecepower-anime',
+      sourceName: 'One Piece Power Anime'
     });
     list.push({
+      id: 'onepiece-ita',
       title: 'One Piece (ITA Doppiato)',
       url: `${this.baseUrl}/anime18/onepiece/ita3/lista-episodi`,
       language: 'it',
       audio: 'ita',
-      source: 'onepiecepower'
+      source: 'onepiecepower-anime',
+      sourceName: 'One Piece Power Anime'
     });
     list.push({
+      id: 'onepiece-eng',
       title: 'One Piece (English Sub)',
       url: `${this.baseUrl}/anime18/one-piece-eng/episode-list`,
       language: 'en',
       audio: 'sub',
-      source: 'onepiecepower'
+      source: 'onepiecepower-anime',
+      sourceName: 'One Piece Power Anime'
     });
     list.push({
+      id: 'onepiece-movie',
       title: 'One Piece Movie / Film',
       url: `${this.baseUrl}/anime18/one-piece-movie/episodi/lista-movie`,
       language: 'it',
       audio: 'both',
-      source: 'onepiecepower'
+      source: 'onepiecepower-anime',
+      sourceName: 'One Piece Power Anime'
     });
     list.push({
+      id: 'onepiece-special',
       title: 'One Piece Special',
       url: `${this.baseUrl}/anime18/onepiece/special/lista-special`,
       language: 'it',
       audio: 'both',
-      source: 'onepiecepower'
+      source: 'onepiecepower-anime',
+      sourceName: 'One Piece Power Anime'
     });
+
+    const seenUrls = new Set(list.map(a => a.url));
 
     // 2. Parse all catalog links from table / links
     $('a').each((_, el) => {
@@ -72,7 +96,6 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
       let text = $(el).text().trim();
       if (!href || !text) return;
 
-      // Filter out non-anime navigational / ad links
       if (
         href.includes('lista-anime') ||
         href.includes('login') ||
@@ -88,12 +111,15 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
       }
 
       if (href.includes('episodi') || href.includes('lista') || href.includes('movie') || href.includes('special')) {
-        if (text.toLowerCase().includes('one piece')) return; // already added above
+        if (text.toLowerCase().includes('one piece')) return;
 
         let fullUrl = href;
         if (!fullUrl.startsWith('http')) {
           fullUrl = `${this.baseUrl}/anime18/${href.replace(/^\.\.\/\.\.\//, '')}`;
         }
+
+        if (seenUrls.has(fullUrl)) return;
+        seenUrls.add(fullUrl);
 
         const isIta = text.includes('ITA') || text.includes('Ita');
         const isSub = text.includes('SUB') || text.includes('Sub');
@@ -102,11 +128,13 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
         else if (isIta && !isSub) audio = 'ita';
 
         list.push({
+          id: fullUrl,
           title: text,
           url: fullUrl,
           language: 'it',
           audio,
-          source: 'onepiecepower'
+          source: 'onepiecepower-anime',
+          sourceName: 'One Piece Power Anime'
         });
       }
     });
@@ -116,13 +144,39 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
   }
 
   /**
+   * Returns catalog with popular anime prioritized first
+   */
+  async getCatalog(lang = null) {
+    const all = await this.getAllAnime();
+    const filtered = (lang && lang !== 'all')
+      ? all.filter(a => a.language === lang)
+      : all;
+
+    const popular = [];
+    const rest = [];
+
+    for (const item of filtered) {
+      const t = item.title.toLowerCase();
+      const isPop = POPULAR_ANIME_KEYWORDS.some(k => t.includes(k));
+      if (isPop) {
+        popular.push(item);
+      } else {
+        rest.push(item);
+      }
+    }
+
+    return [...popular, ...rest];
+  }
+
+  /**
    * Search anime by title or keywords
-   * @param {string} query 
-   * @param {string|null} lang 
    */
   async search(query, lang = null) {
-    const catalog = await this.getCatalog();
-    const clean = (query || '').toLowerCase().trim();
+    if (!query || !query.trim()) {
+      return this.getCatalog(lang);
+    }
+    const catalog = await this.getAllAnime();
+    const clean = (query || '').replace(/\s*\[[^\]]*\]\s*/g, ' ').toLowerCase().trim();
     const cleanNorm = clean.replace(/[^a-z0-9]/g, '');
 
     return catalog.filter(a => {
@@ -139,7 +193,7 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
    * Pick a random anime from catalog
    */
   async getRandomAnime(lang = null) {
-    const catalog = await this.getCatalog();
+    const catalog = await this.getAllAnime();
     const filtered = lang && lang !== 'all' ? catalog.filter(a => a.language === lang) : catalog;
     if (filtered.length === 0) return null;
     const idx = Math.floor(Math.random() * filtered.length);
@@ -148,7 +202,6 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
 
   /**
    * Get all episodes for an anime series
-   * @param {string} animeUrl 
    */
   async getEpisodes(animeUrl) {
     const html = await fetchHtml(animeUrl);
@@ -159,7 +212,6 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
     baseUrlParts.pop();
     const dirUrl = baseUrlParts.join('/');
 
-    // 1. Try table rows first (contains cleanly formatted titles and episode links)
     $('table tr').each((_, el) => {
       const link = $(el).find('a[href*="pagine/"]').first();
       if (link.length > 0) {
@@ -185,7 +237,6 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
       }
     });
 
-    // 2. Fallback to any a[href*="pagine/"] if no table rows matched
     if (episodes.length === 0) {
       $('a[href*="pagine/"]').each((_, el) => {
         const rawHref = $(el).attr('href');
@@ -212,9 +263,6 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
 
   /**
    * Resolves the video stream for an episode page
-   * @param {string} episodeUrl 
-   * @param {'subita'|'ita'} preferredAudio 
-   * @returns {Promise<{ streamUrl: string|null, options: { ita: string|null, subita: string|null, direct: string|null }, availableAudios: string[] }>}
    */
   async getEpisodeStream(episodeUrl, preferredAudio = 'subita') {
     const html = await fetchHtml(episodeUrl);
@@ -226,7 +274,6 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
       direct: null
     };
 
-    // 1. Check Schema.org video object
     $('script[type="application/ld+json"]').each((_, el) => {
       try {
         const data = JSON.parse($(el).html());
@@ -239,18 +286,15 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
       } catch {}
     });
 
-    // 2. Check inline scripts for videoUrl or dynamic concatenated source
     $('script').each((_, el) => {
       const s = $(el).html() || '';
 
-      // Pattern A: Concatenation with + type + e.g. 'https://serverfile.club/anime/...' + type + '...'
       const concatMatch = s.match(/['"](https?:\/\/(?:serverfile|stream)[^'"]+)['"]\s*\+\s*type\s*\+\s*['"]([^'"]+)['"]/);
       if (concatMatch) {
         streamOptions.ita = concatMatch[1] + 'ita' + concatMatch[2];
         streamOptions.subita = concatMatch[1] + 'subita' + concatMatch[2];
       }
 
-      // Pattern B: videoUrl: "..."
       const vMatch = s.match(/videoUrl\s*:\s*["']([^"']+\.mp4[^"']*)["']/);
       if (vMatch) {
         streamOptions.direct = vMatch[1];
@@ -258,7 +302,6 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
         if (vMatch[1].includes('/ita/')) streamOptions.ita = vMatch[1];
       }
 
-      // Pattern C: direct serverfile.club mp4
       if (!streamOptions.direct && !streamOptions.ita && !streamOptions.subita) {
         const sfcMatch = s.match(/["'](https?:\/\/serverfile\.club\/[^"']+\.mp4)["']/);
         if (sfcMatch) {
@@ -269,7 +312,6 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
       }
     });
 
-    // 3. Fallback to video tags
     if (!streamOptions.direct && !streamOptions.ita && !streamOptions.subita) {
       const vid = $('video source').attr('src') || $('video').attr('src');
       if (vid) {
@@ -279,12 +321,10 @@ class OnePiecePowerAnimeProvider extends BaseProvider {
       }
     }
 
-    // Determine available audios
     const availableAudios = [];
     if (streamOptions.ita) availableAudios.push('ita');
     if (streamOptions.subita) availableAudios.push('subita');
 
-    // Pick stream based on preference
     let selectedUrl = null;
     if (preferredAudio === 'ita' && streamOptions.ita) {
       selectedUrl = streamOptions.ita;

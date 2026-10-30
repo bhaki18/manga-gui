@@ -17,3 +17,4 @@ src/
 
 installer/package.zip
 *.zip
+build-packages.sh
