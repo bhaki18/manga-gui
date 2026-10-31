@@ -75,6 +75,9 @@ public partial class MainViewModel : ViewModelBase
     private decimal _selectedNumber = 1;
 
     [ObservableProperty]
+    private string _selectedNumberText = "1";
+
+    [ObservableProperty]
     private decimal _maxNumber = 1;
 
     [ObservableProperty]
@@ -759,10 +762,45 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
+    public void JumpToMaxNumber()
+    {
+        if (MaxNumber >= 1)
+        {
+            SelectedNumber = MaxNumber;
+        }
+    }
+
+    [RelayCommand]
+    public void JumpToFirstNumber()
+    {
+        SelectedNumber = 1;
+    }
+
     partial void OnSelectedNumberChanged(decimal value)
     {
+        var str = ((int)value).ToString();
+        if (SelectedNumberText != str)
+        {
+            SelectedNumberText = str;
+        }
         OnPropertyChanged(nameof(IsCurrentNumberWatched));
         OnPropertyChanged(nameof(WatchedStatusBadge));
+    }
+
+    partial void OnSelectedNumberTextChanged(string value)
+    {
+        if (int.TryParse(value, out var n) && n >= 1)
+        {
+            if (n > (int)MaxNumber)
+            {
+                MaxNumber = n;
+            }
+            if ((int)SelectedNumber != n)
+            {
+                SelectedNumber = n;
+            }
+        }
     }
 
     [RelayCommand]

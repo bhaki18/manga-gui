@@ -522,10 +522,27 @@
                     <!-- Right: Episode/Chapter Picker & Action Buttons (FIXED POSITIONS) -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
                         <!-- 1. Number Selector & Unmark Status (Fixed Slot) -->
-                        <StackPanel Spacing="6" VerticalAlignment="Center" Width="245">
-                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding NumberLabel}" Foreground="#A0A0A0" FontSize="13" VerticalAlignment="Center" Width="58"/>
+                        <StackPanel Spacing="6" VerticalAlignment="Center" Width="265">
+                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding NumberLabel}" Foreground="#A0A0A0" FontSize="13" VerticalAlignment="Center" Width="56"/>
                                 
+                                <Button Command="{Binding JumpToFirstNumberCommand}"
+                                        ToolTip.Tip="Jump to first (1)"
+                                        Width="24"
+                                        Height="28"
+                                        Padding="0"
+                                        Background="#1E1F26"
+                                        BorderBrush="#33343E"
+                                        BorderThickness="1"
+                                        Foreground="#888888"
+                                        FontWeight="Bold"
+                                        FontSize="11"
+                                        CornerRadius="4"
+                                        HorizontalContentAlignment="Center"
+                                        VerticalContentAlignment="Center"
+                                        Cursor="Hand"
+                                        Content="|◀"/>
+
                                 <Button Command="{Binding DecrementNumberCommand}"
                                         ToolTip.Tip="Previous"
                                         Width="26"
@@ -543,21 +560,20 @@
                                         Cursor="Hand"
                                         Content="−"/>
 
-                                <NumericUpDown Value="{Binding SelectedNumber}" 
-                                               Minimum="1" 
-                                               Maximum="{Binding MaxNumber}" 
-                                               FormatString="0"
-                                               ShowButtonSpinner="False"
-                                               Width="58"
-                                               MaxWidth="68"
-                                               HorizontalContentAlignment="Center"
-                                               VerticalContentAlignment="Center"
-                                               CornerRadius="4"
-                                               Background="#141519"
-                                               BorderBrush="#333338"
-                                               Foreground="#FFFFFF"
-                                               FontSize="14"
-                                               FontWeight="Bold"/>
+                                <TextBox Text="{Binding SelectedNumberText, Mode=TwoWay}"
+                                         ToolTip.Tip="Type episode or chapter number directly"
+                                         Width="60"
+                                         Height="28"
+                                         HorizontalContentAlignment="Center"
+                                         VerticalContentAlignment="Center"
+                                         CornerRadius="4"
+                                         Background="#141519"
+                                         BorderBrush="#FF640A"
+                                         BorderThickness="1"
+                                         Foreground="#FFFFFF"
+                                         FontSize="14"
+                                         FontWeight="Bold"
+                                         Padding="2,0"/>
 
                                 <Button Command="{Binding IncrementNumberCommand}"
                                         ToolTip.Tip="Next"
@@ -576,11 +592,35 @@
                                         Cursor="Hand"
                                         Content="+"/>
 
-                                <TextBlock Text="{Binding MaxNumber, StringFormat='/{0}'}" 
-                                           Foreground="#808080" 
-                                           FontSize="12" 
-                                           VerticalAlignment="Center"
-                                           Margin="2,0,0,0"/>
+                                <Button Command="{Binding JumpToMaxNumberCommand}"
+                                        ToolTip.Tip="Jump to latest"
+                                        Width="24"
+                                        Height="28"
+                                        Padding="0"
+                                        Background="#1E1F26"
+                                        BorderBrush="#33343E"
+                                        BorderThickness="1"
+                                        Foreground="#888888"
+                                        FontWeight="Bold"
+                                        FontSize="11"
+                                        CornerRadius="4"
+                                        HorizontalContentAlignment="Center"
+                                        VerticalContentAlignment="Center"
+                                        Cursor="Hand"
+                                        Content="▶|"/>
+
+                                <Button Command="{Binding JumpToMaxNumberCommand}"
+                                        ToolTip.Tip="Click to select latest episode"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="2,0"
+                                        Cursor="Hand"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding MaxNumber, StringFormat='/{0}'}" 
+                                               Foreground="#FF9A60" 
+                                               FontSize="12" 
+                                               FontWeight="SemiBold"/>
+                                </Button>
                             </StackPanel>
 
                             <!-- Unmark Button below the selector (Fixed height, never shifts Play button) -->
