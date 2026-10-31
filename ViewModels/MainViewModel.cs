@@ -790,16 +790,52 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnSelectedNumberTextChanged(string value)
     {
-        if (int.TryParse(value, out var n) && n >= 1)
+        if (string.IsNullOrWhiteSpace(value))
         {
-            if (n > (int)MaxNumber)
+            return;
+        }
+
+        if (int.TryParse(value, out var n))
+        {
+            var max = Math.Max(1, (int)MaxNumber);
+            var clamped = Math.Clamp(n, 1, max);
+
+            if ((int)SelectedNumber != clamped)
             {
-                MaxNumber = n;
+                SelectedNumber = clamped;
             }
-            if ((int)SelectedNumber != n)
+
+            if (n != clamped)
             {
-                SelectedNumber = n;
+                SelectedNumberText = clamped.ToString();
             }
+        }
+        else
+        {
+            SelectedNumberText = ((int)SelectedNumber).ToString();
+        }
+    }
+
+    public void ValidateSelectedNumberText()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedNumberText) || !int.TryParse(SelectedNumberText, out var n))
+        {
+            SelectedNumberText = ((int)SelectedNumber).ToString();
+        }
+        else
+        {
+            var max = Math.Max(1, (int)MaxNumber);
+            var clamped = Math.Clamp(n, 1, max);
+            SelectedNumber = clamped;
+            SelectedNumberText = clamped.ToString();
+        }
+    }
+
+    partial void OnMaxNumberChanged(decimal value)
+    {
+        if (value >= 1 && SelectedNumber > value)
+        {
+            SelectedNumber = value;
         }
     }
 
@@ -1054,7 +1090,11 @@ public partial class MainViewModel : ViewModelBase
             var total = await _cliService.GetMediaDetailsAsync(item, SelectedLanguage);
             if (SelectedItem == item && total > 0)
             {
-                MaxNumber = Math.Max((decimal)total, SelectedNumber);
+                MaxNumber = (decimal)total;
+                if (SelectedNumber > MaxNumber)
+                {
+                    SelectedNumber = MaxNumber;
+                }
             }
         }
         catch {}

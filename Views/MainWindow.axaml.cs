@@ -26,4 +26,12 @@ public partial class MainWindow : Window
             vm.OpenSearchHistory();
         }
     }
+
+    private void OnSelectedNumberLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            vm.ValidateSelectedNumberText();
+        }
+    }
 }

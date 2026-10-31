@@ -561,7 +561,8 @@
                                         Content="−"/>
 
                                 <TextBox Text="{Binding SelectedNumberText, Mode=TwoWay}"
-                                         ToolTip.Tip="Type episode or chapter number directly"
+                                         LostFocus="OnSelectedNumberLostFocus"
+                                         ToolTip.Tip="Type episode or chapter number directly (1 to max)"
                                          Width="60"
                                          Height="28"
                                          HorizontalContentAlignment="Center"
