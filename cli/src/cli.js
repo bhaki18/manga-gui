@@ -1731,7 +1731,7 @@ async function handleMangaFlow(query, options) {
       if (c.externalUrl) return false;
       const cNum = String(c.number !== undefined ? c.number : (c.id || '')).trim();
       const cleanNum = cNum.replace(/^0+/, '') || '0';
-      return cNum === targetCh || cleanNum === cleanTargetCh;
+      return cNum === targetCh || cleanNum === cleanTargetCh || c.id === targetCh;
     });
 
     // Pass 2: explicit Chapter / Capitolo number in title (non-external)

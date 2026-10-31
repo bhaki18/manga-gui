@@ -227,6 +227,14 @@ class OnePiecePowerProvider extends BaseProvider {
       }
     });
 
+    const isBerserk = mangaUrl.toLowerCase().includes('berserk');
+    const hasSpecialPrologue = isBerserk || chapters.some(c => c.id && c.id.startsWith('000-'));
+    if (hasSpecialPrologue) {
+      chapters.forEach((c, idx) => {
+        c.number = String(idx + 1);
+      });
+    }
+
     return chapters;
   }
 
