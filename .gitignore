@@ -5,7 +5,11 @@ publish/
 pkg/
 src/
 *.pkg.tar.zst
+*.deb
+*.tar.gz
+.deb-build-tmp/
 *.pdb
+*.deb
 
 # IDE and tooling
 *.user

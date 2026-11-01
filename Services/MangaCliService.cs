@@ -137,11 +137,17 @@ public class MangaCliService
     public MangaCliService()
     {
         var baseDir = AppContext.BaseDirectory;
+        var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var candidates = new[]
         {
             Path.Combine(baseDir, "cli", "src", "cli.js"),
             Path.Combine(baseDir, "..", "..", "..", "cli", "src", "cli.js"),
             Path.Combine(Directory.GetCurrentDirectory(), "cli", "src", "cli.js"),
+            "/usr/lib/manga-gui/cli/src/cli.js",
+            "/usr/local/lib/manga-gui/cli/src/cli.js",
+            "/opt/manga-gui/cli/src/cli.js",
+            Path.Combine(userHome, ".local", "lib", "manga-gui", "cli", "src", "cli.js"),
+            Path.Combine(userHome, ".local", "share", "manga-gui", "cli", "src", "cli.js"),
             "/home/adp/Desktop/manga-gui/cli/src/cli.js"
         };
 

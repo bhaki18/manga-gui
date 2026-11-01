@@ -45,13 +45,29 @@ Lo script `./publish-gh-pages.sh` aggiorna automaticamente [`PKGBUILD`](file:///
 
 #### Opzione A: Incremento rapido di release (`pkgrel`, es. da `1.0.0-2` a `1.0.0-3`)
 ```bash
+# Pubblica SOLO per Arch Linux (x86_64/)
 ./publish-gh-pages.sh --bump --notes "Aggiunte nuove funzionalità e correzioni bug."
+
+# Oppure pubblica sia Arch che Debian (.deb) e Tarball universale:
+./publish-gh-pages.sh --bump --all --notes "Aggiunte nuove funzionalità e correzioni bug."
 ```
 
 #### Opzione B: Nuova versione maggiore/minore (`pkgver`, es. da `1.0.0-3` a `1.1.0-1`)
 ```bash
 ./publish-gh-pages.sh --version 1.1.0 --notes "Nuova versione 1.1.0 con nuovi filtri e miglioramenti."
 ```
+
+#### Opzione C: Pubblicare solo un formato specifico senza toccare gli altri
+```bash
+# Pubblica SOLO su x86_64/ per Arch (Pacman):
+./publish-gh-pages.sh --arch-only
+
+# Pubblica SOLO nella cartella deb/ per Debian/Ubuntu (senza toccare il repo Pacman):
+./publish-gh-pages.sh --deb-only
+```
+
+> [!NOTE]
+> **Isolamento completo del repository Pacman**: Il server Pacman legge esclusivamente all'interno della cartella `x86_64/` registrata tramite `repo-add`. I pacchetti Debian (`deb/`) e i tarball universali (`tar/`) risiedono in cartelle separate e non possono in nessun modo interferire con Pacman né con l'AUR.
 
 ### Passo 3 — Committa anche `PKGBUILD` e `version.json` aggiornati sul repo `manga-gui`
 Dopo aver lanciato `./publish-gh-pages.sh --bump` (o `--version`), i file locali `PKGBUILD` e `version.json` avranno il nuovo numero di versione. Sincronizzali anche sul branch principale di `manga-gui`:

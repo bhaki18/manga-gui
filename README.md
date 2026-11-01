@@ -4,23 +4,53 @@
 
 ---
 
-## 🐧 Installazione su Arch Linux / Manjaro (Pacman)
+## 🐧 Installazione su Linux
 
-### Metodo 1: Installazione con pacman (.pkg.tar.zst già generato)
-Puoi installare direttamente il pacchetto compilato eseguendo:
+Manga GUI supporta nativamente tutte le distribuzioni Linux grazie ai diversi formati di pacchetto e all'installer universale.
+
+### 🟠 Debian, Ubuntu, Linux Mint, Pop!_OS (.deb)
+Scarica o genera il pacchetto `.deb` e installalo con:
 ```bash
-sudo pacman -U manga-gui-bin-1.0.0-1-x86_64.pkg.tar.zst
+sudo apt update
+sudo apt install ./publish/manga-gui_1.1.4-1_amd64.deb
+```
+oppure con `dpkg`:
+```bash
+sudo dpkg -i manga-gui_1.1.4-1_amd64.deb
+sudo apt install -f
 ```
 
-### Metodo 2: Compilazione locale tramite makepkg
+---
+
+### 🔵 Arch Linux / Manjaro / EndeavourOS (.pkg.tar.zst)
+Installa direttamente il pacchetto Pacman precompilato:
+```bash
+sudo pacman -U manga-gui-bin-1.1.4-1-x86_64.pkg.tar.zst
+```
+oppure compila dal sorgente con `makepkg`:
 ```bash
 git clone https://github.com/bhaki18/manga-gui.git
 cd manga-gui
 makepkg -si
 ```
-Il pacchetto installerà:
-- Il comando di sistema `/usr/bin/manga-gui`
-- L'icona e il file `.desktop` nel menu applicazioni del tuo desktop environment (KDE, GNOME, XFCE, ecc.)
+
+---
+
+### 🟢 Fedora, openSUSE, Alpine, Void e Altre Distro (Installer Universale)
+Scarica l'archivio universale `manga-gui-linux-x64.tar.gz` o clona il repository, quindi esegui:
+```bash
+# Installazione per tutto il sistema (consigliata)
+sudo ./install.sh
+
+# Oppure installazione utente locale senza permessi di root
+./install.sh
+```
+L'installer rileva automaticamente il gestore pacchetti di sistema (`apt`, `dnf`, `zypper`, `pacman`, `apk`, `xbps`), installa le dipendenze (`mpv`, `node`, `npm`, `git`, `curl`), registra il comando `manga-gui` e aggiunge l'icona nel menu delle applicazioni.
+
+Per disinstallare in qualsiasi momento:
+```bash
+./uninstall.sh
+```
 
 ---
 
