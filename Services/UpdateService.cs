@@ -343,7 +343,7 @@ public class UpdateService
             sb.AppendLine("    run_privileged xbps-install -Sy git curl nodejs npm mpv || true");
             sb.AppendLine("  fi");
             sb.AppendLine("else");
-            sb.AppendLine("  echo \"[STEP 1/4] Tutte le dipendenze (git, curl, node, npm, mpv, dotnet) sono già installate.\"");
+            sb.AppendLine("  echo \"[STEP 1/4] Tutte le dipendenze (git, curl, node, npm, mpv, dotnet) sono giÃ  installate.\"");
             sb.AppendLine("fi");
             sb.AppendLine("");
             sb.AppendLine("echo \"[STEP 2/4] Download dell'ultima versione ($REMOTE_VER) dal repository...\"");
@@ -456,13 +456,13 @@ public class UpdateService
 
             if (proc.ExitCode == 0)
             {
-                onProgress?.Invoke("✔ Aggiornamento completato! Riavvio dell'applicazione in corso...");
+                onProgress?.Invoke("âœ” Aggiornamento completato! Riavvio dell'applicazione in corso...");
                 await Task.Delay(900);
                 Environment.Exit(0);
                 return (true, "Aggiornamento completato con successo.");
             }
 
-            return (false, $"L'aggiornamento è terminato con codice {proc.ExitCode}.");
+            return (false, $"L'aggiornamento Ã¨ terminato con codice {proc.ExitCode}.");
         }
         catch (Exception ex)
         {
@@ -470,15 +470,27 @@ public class UpdateService
         }
     }
 
+    private static void DeleteDirectorySafe(string path)
+    {
+        if (!Directory.Exists(path)) return;
+        try
+        {
+            var dir = new DirectoryInfo(path);
+            foreach (var file in dir.GetFiles("*", SearchOption.AllDirectories))
+            {
+                try { file.Attributes = FileAttributes.Normal; } catch { }
+            }
+            dir.Delete(true);
+        }
+        catch { }
+    }
+
     private async Task<(bool success, string message)> PerformWindowsUpdateAsync(UpdateCheckResult updateInfo, Action<string>? onProgress)
     {
         try
         {
             var tempDir = Path.Combine(Path.GetTempPath(), "manga-gui-win-update");
-            if (Directory.Exists(tempDir))
-            {
-                try { Directory.Delete(tempDir, true); } catch { }
-            }
+            DeleteDirectorySafe(tempDir);
             Directory.CreateDirectory(tempDir);
 
             var buildBatPath = Path.Combine(tempDir, "build-update.bat");
@@ -498,7 +510,17 @@ public class UpdateService
             buildBat.AppendLine("where dotnet >nul 2>nul || (echo Installazione .NET 10 SDK... && winget install --id Microsoft.DotNet.SDK.10 -e --silent --accept-package-agreements --accept-source-agreements)");
             buildBat.AppendLine("set \"PATH=%PATH%;C:\\Program Files\\Git\\cmd;C:\\Program Files\\nodejs;C:\\Program Files\\dotnet\"");
             buildBat.AppendLine($"echo [STEP 2/4] Scaricamento ultima versione ({updateInfo.RemoteVersion}) da {repoUrl}...");
-            buildBat.AppendLine($"git clone --depth 1 \"{repoUrl}\" \"{tempDir}\\src\"");
+            buildBat.AppendLine($"if exist \"{tempDir}\\src\\.git\" (");
+            buildBat.AppendLine($"  cd /d \"{tempDir}\\src\" && git fetch --depth 1 origin main && git reset --hard origin/main");
+            buildBat.AppendLine(") else (");
+            buildBat.AppendLine($"  if exist \"{tempDir}\\src\" rmdir /s /q \"{tempDir}\\src\" 2>nul");
+            buildBat.AppendLine($"  git clone --depth 1 \"{repoUrl}\" \"{tempDir}\\src\"");
+            buildBat.AppendLine(")");
+            buildBat.AppendLine("if errorlevel 1 (");
+            buildBat.AppendLine("  echo Fallback pulizia e nuovo clone...");
+            buildBat.AppendLine($"  rmdir /s /q \"{tempDir}\\src\" 2>nul");
+            buildBat.AppendLine($"  git clone --depth 1 \"{repoUrl}\" \"{tempDir}\\src\"");
+            buildBat.AppendLine(")");
             buildBat.AppendLine("if errorlevel 1 exit /b 1");
             buildBat.AppendLine("echo [STEP 3/4] Installazione dipendenze CLI (npm) e compilazione MangaGui.exe...");
             buildBat.AppendLine($"if exist \"{tempDir}\\src\\cli\\package.json\" (cd /d \"{tempDir}\\src\\cli\" && call npm install --no-audit --no-fund)");
@@ -514,12 +536,13 @@ public class UpdateService
 
             await File.WriteAllTextAsync(buildBatPath, buildBat.ToString());
 
-            // 2. Script di sostituzione file (attende la chiusura di MangaGui.exe perché Windows blocca i file .exe in esecuzione) e riavvio
+            // 2. Script di sostituzione file (attende la chiusura di MangaGui.exe perchÃ© Windows blocca i file .exe in esecuzione) e riavvio
             var applyBat = new StringBuilder();
             applyBat.AppendLine("@echo off");
             applyBat.AppendLine("timeout /t 2 /nobreak >nul");
             applyBat.AppendLine($"taskkill /PID {currentPid} /F >nul 2>nul");
             applyBat.AppendLine($"xcopy /E /I /Y \"{tempDir}\\out\\*\" \"{installDir}\\\" >nul");
+            applyBat.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-ChildItem -Path '{installDir}' -Recurse | Unblock-File\" >nul 2>nul");
             applyBat.AppendLine($"start \"\" \"{installDir}\\MangaGui.exe\"");
             applyBat.AppendLine("exit /b 0");
 
@@ -558,7 +581,7 @@ public class UpdateService
 
             if (proc.ExitCode == 0)
             {
-                onProgress?.Invoke("✔ Aggiornamento Windows pronto! Riavvio in corso...");
+                onProgress?.Invoke("âœ” Aggiornamento Windows pronto! Riavvio in corso...");
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
@@ -571,7 +594,7 @@ public class UpdateService
                 return (true, "Aggiornamento Windows completato.");
             }
 
-            return (false, $"La compilazione dell'aggiornamento Windows è terminata con codice {proc.ExitCode}.");
+            return (false, $"La compilazione dell'aggiornamento Windows Ã¨ terminata con codice {proc.ExitCode}.");
         }
         catch (Exception ex)
         {
