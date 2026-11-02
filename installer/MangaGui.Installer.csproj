@@ -9,6 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="package.zip" />
+    <EmbeddedResource Include="package.zip" Condition="Exists('package.zip')" />
   </ItemGroup>
 </Project>

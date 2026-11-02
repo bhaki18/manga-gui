@@ -43,8 +43,16 @@ class Program
                 }
                 else
                 {
-                    MessageBoxW(IntPtr.Zero, "File del pacchetto di installazione non trovato.", "Errore Manga GUI", MB_OK | MB_ICONERROR);
-                    return;
+                    var sourceExe = Path.Combine(AppContext.BaseDirectory, "MangaGui.exe");
+                    if (File.Exists(sourceExe))
+                    {
+                        CopyDirectory(AppContext.BaseDirectory, installDir);
+                    }
+                    else
+                    {
+                        MessageBoxW(IntPtr.Zero, "File del pacchetto di installazione non trovato.", "Errore Manga GUI", MB_OK | MB_ICONERROR);
+                        return;
+                    }
                 }
             }
             else
@@ -138,6 +146,24 @@ class Program
         catch (Exception ex)
         {
             MessageBoxW(IntPtr.Zero, $"Si è verificato un errore durante l'installazione:\n{ex.Message}", "Errore Installazione", MB_OK | MB_ICONERROR);
+        }
+    }
+
+    static void CopyDirectory(string sourceDir, string destinationDir)
+    {
+        Directory.CreateDirectory(destinationDir);
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var fileName = Path.GetFileName(file);
+            if (fileName.Equals("MangaGui-Setup.exe", StringComparison.OrdinalIgnoreCase) ||
+                fileName.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase))
+                continue;
+            File.Copy(file, Path.Combine(destinationDir, fileName), overwrite: true);
+        }
+        foreach (var subDir in Directory.GetDirectories(sourceDir))
+        {
+            var dirName = Path.GetFileName(subDir);
+            CopyDirectory(subDir, Path.Combine(destinationDir, dirName));
         }
     }
 
