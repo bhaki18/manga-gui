@@ -42,7 +42,7 @@ public partial class MainViewModel : ViewModelBase
     public string AppVersionText => $"manga-gui {InstalledVersionText}";
     public bool HasUpdateNotes => !string.IsNullOrWhiteSpace(UpdateNotesText);
     public bool HasUpdateProgress => !string.IsNullOrWhiteSpace(UpdateProgressLog);
-    public string UpdateConfirmButtonText => IsUpdating ? "⏳ Aggiornamento in corso..." : "⚡ Aggiorna Ora (Scarica & Compila)";
+    public string UpdateConfirmButtonText => IsUpdating ? "â³ Aggiornamento in corso..." : "âš¡ Aggiorna Ora (Scarica & Compila)";
 
     [ObservableProperty]
     private string _activeTab = "Anime";
@@ -64,7 +64,7 @@ public partial class MainViewModel : ViewModelBase
 
     public string DownloadedTabColor => (ActiveTab == "Downloaded" || ActiveTab == "Downloads") ? "#FF640A" : "#D0D0D0";
     public bool IsDownloadedTabActive => ActiveTab == "Downloaded" || ActiveTab == "Downloads";
-    public string DownloadIconText => IsDownloading ? "⏳" : "⬇";
+    public string DownloadIconText => IsDownloading ? "â³" : "â¬‡";
     public string DownloadButtonText => IsDownloading ? (!string.IsNullOrWhiteSpace(DownloadProgressText) ? $"DOWNLOADING ({DownloadProgressText})" : "DOWNLOADING...") : "DOWNLOAD";
 
 
@@ -125,13 +125,13 @@ public partial class MainViewModel : ViewModelBase
     private Func<Task>? _pendingConfirmAsyncAction;
 
     public string ActionButtonText => SelectedItem?.IsDownloaded == true
-        ? (SelectedItem?.Type.ToLower() == "manga" ? "📖 READ OFFLINE" : "▶ PLAY OFFLINE")
-        : (SelectedItem?.Type.ToLower() == "manga" ? "📖 READ NOW" : "▶ START WATCHING");
+        ? (SelectedItem?.Type.ToLower() == "manga" ? "ðŸ“– READ OFFLINE" : "â–¶ PLAY OFFLINE")
+        : (SelectedItem?.Type.ToLower() == "manga" ? "ðŸ“– READ NOW" : "â–¶ START WATCHING");
     public string NumberLabel => SelectedItem?.Type.ToLower() == "manga" ? "Chapter:" : "Episode:";
 
     public bool IsCurrentNumberWatched => SelectedItem != null && SelectedItem.WatchedNumbers != null && SelectedItem.WatchedNumbers.Contains((int)SelectedNumber);
-    public string WatchedStatusBadge => IsCurrentNumberWatched ? (SelectedItem?.Type.ToLower() == "manga" ? "✔ READ" : "✔ WATCHED") : "";
-    public string UnmarkButtonText => SelectedItem?.Type.ToLower() == "manga" ? "✕ Unmark as read" : "✕ Unmark as watched";
+    public string WatchedStatusBadge => IsCurrentNumberWatched ? (SelectedItem?.Type.ToLower() == "manga" ? "âœ” READ" : "âœ” WATCHED") : "";
+    public string UnmarkButtonText => SelectedItem?.Type.ToLower() == "manga" ? "âœ• Unmark as read" : "âœ• Unmark as watched";
 
     public string AnimeTabColor => ActiveTab == "Anime" ? "#FF640A" : "#D0D0D0";
     public string MangaTabColor => ActiveTab == "Manga" ? "#FF640A" : "#D0D0D0";
@@ -163,7 +163,7 @@ public partial class MainViewModel : ViewModelBase
                 parts.Add($"Audio: {SelectedAudioFilter}");
             if (!string.IsNullOrWhiteSpace(SelectedSource) && SelectedSource != "All sources")
                 parts.Add($"Source: {MangaCliService.FormatSourceName(SelectedSource)}");
-            return string.Join("  •  ", parts);
+            return string.Join("  â€¢  ", parts);
         }
     }
 
@@ -244,30 +244,30 @@ public partial class MainViewModel : ViewModelBase
                 "All Audio (Sub & Dub)",
                 "Sub (Subtitled / Sottotitolato)",
                 "Dub (Dubbed / Doppiato)",
-                "💬 Solo Sub",
-                "🎙️ Solo Dub"
+                "ðŸ’¬ Solo Sub",
+                "ðŸŽ™ï¸ Solo Dub"
             );
         }
 
         var upper = code.ToUpperInvariant();
         var (flag, subDesc, dubDesc) = code switch
         {
-            "it" => ("🇮🇹", "Sottotitolato", "Doppiato"),
-            "en" => ("🇬🇧", "Subtitled", "Dubbed"),
-            "es" => ("🇪🇸", "Subtitulado", "Doblado"),
-            "fr" => ("🇫🇷", "Sous-titré", "Doublé"),
-            "de" => ("🇩🇪", "Untertitelt", "Synchronisiert"),
-            "pt-br" => ("🇧🇷", "Legendado", "Dublado"),
-            "ru" => ("🇷🇺", "Субтитры", "Дубляж"),
-            "ja" => ("🇯🇵", "Subtitled", "Original / Dub"),
-            "ar" => ("🇸🇦", "مترجم", "مدبلج"),
-            "pl" => ("🇵🇱", "Napisy", "Dubbing"),
-            "tr" => ("🇹🇷", "Altyazılı", "Dublaj"),
-            "id" => ("🇮🇩", "Subtitle", "Dubbing"),
-            "vi" => ("🇻🇳", "Vietsub", "Thuyết minh"),
-            "ko" => ("🇰🇷", "자막", "더빙"),
-            "zh" => ("🇨🇳", "字幕", "配音"),
-            _ => ("🌐", "Subtitled", "Dubbed")
+            "it" => ("ðŸ‡®ðŸ‡¹", "Sottotitolato", "Doppiato"),
+            "en" => ("ðŸ‡¬ðŸ‡§", "Subtitled", "Dubbed"),
+            "es" => ("ðŸ‡ªðŸ‡¸", "Subtitulado", "Doblado"),
+            "fr" => ("ðŸ‡«ðŸ‡·", "Sous-titrÃ©", "DoublÃ©"),
+            "de" => ("ðŸ‡©ðŸ‡ª", "Untertitelt", "Synchronisiert"),
+            "pt-br" => ("ðŸ‡§ðŸ‡·", "Legendado", "Dublado"),
+            "ru" => ("ðŸ‡·ðŸ‡º", "Ð¡ÑƒÐ±Ñ‚Ð¸Ñ‚Ñ€Ñ‹", "Ð”ÑƒÐ±Ð»ÑÐ¶"),
+            "ja" => ("ðŸ‡¯ðŸ‡µ", "Subtitled", "Original / Dub"),
+            "ar" => ("ðŸ‡¸ðŸ‡¦", "Ù…ØªØ±Ø¬Ù…", "Ù…Ø¯Ø¨Ù„Ø¬"),
+            "pl" => ("ðŸ‡µðŸ‡±", "Napisy", "Dubbing"),
+            "tr" => ("ðŸ‡¹ðŸ‡·", "AltyazÄ±lÄ±", "Dublaj"),
+            "id" => ("ðŸ‡®ðŸ‡©", "Subtitle", "Dubbing"),
+            "vi" => ("ðŸ‡»ðŸ‡³", "Vietsub", "Thuyáº¿t minh"),
+            "ko" => ("ðŸ‡°ðŸ‡·", "ìžë§‰", "ë”ë¹™"),
+            "zh" => ("ðŸ‡¨ðŸ‡³", "å­—å¹•", "é…éŸ³"),
+            _ => ("ðŸŒ", "Subtitled", "Dubbed")
         };
 
         return (
@@ -317,19 +317,19 @@ public partial class MainViewModel : ViewModelBase
         "All languages",
         "Italiano (IT)",
         "English (EN)",
-        "Español (ES)",
-        "Français (FR)",
+        "EspaÃ±ol (ES)",
+        "FranÃ§ais (FR)",
         "Deutsch (DE)",
-        "Português (PT-BR)",
-        "Русский (RU)",
-        "日本語 (JA)",
-        "العربية (AR)",
+        "PortuguÃªs (PT-BR)",
+        "Ð ÑƒÑÑÐºÐ¸Ð¹ (RU)",
+        "æ—¥æœ¬èªž (JA)",
+        "Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© (AR)",
         "Polski (PL)",
-        "Türkçe (TR)",
+        "TÃ¼rkÃ§e (TR)",
         "Indonesian (ID)",
-        "Tiếng Việt (VI)",
-        "한국어 (KO)",
-        "中文 (ZH)"
+        "Tiáº¿ng Viá»‡t (VI)",
+        "í•œêµ­ì–´ (KO)",
+        "ä¸­æ–‡ (ZH)"
     };
 
     private bool _isUpdatingSources;
@@ -407,17 +407,17 @@ public partial class MainViewModel : ViewModelBase
                 UpdateNotesText = check.ReleaseNotes;
                 UpdateProgressLog = string.Empty;
                 IsUpdateDialogVisible = true;
-                StatusText = $"🚀 Nuova versione disponibile: v{check.RemoteVersion} (installata: v{check.InstalledVersion})";
+                StatusText = $"ðŸš€ Nuova versione disponibile: v{check.RemoteVersion} (installata: v{check.InstalledVersion})";
             }
             else if (isManual)
             {
                 if (check.CheckSucceeded)
                 {
-                    StatusText = $"✔ Nessun aggiornamento necessario: hai già l'ultima versione installata (v{check.InstalledVersion}).";
+                    StatusText = $"âœ” Nessun aggiornamento necessario: hai giÃ  l'ultima versione installata (v{check.InstalledVersion}).";
                 }
                 else
                 {
-                    StatusText = $"⚠️ {check.ErrorMessage ?? "Impossibile verificare gli aggiornamenti online."}";
+                    StatusText = $"âš ï¸ {check.ErrorMessage ?? "Impossibile verificare gli aggiornamenti online."}";
                 }
             }
         }
@@ -458,14 +458,14 @@ public partial class MainViewModel : ViewModelBase
 
             if (!success)
             {
-                UpdateProgressLog = $"❌ {msg}";
-                StatusText = $"❌ {msg}";
+                UpdateProgressLog = $"âŒ {msg}";
+                StatusText = $"âŒ {msg}";
             }
         }
         catch (Exception ex)
         {
-            UpdateProgressLog = $"❌ Errore: {ex.Message}";
-            StatusText = $"❌ Errore aggiornamento: {ex.Message}";
+            UpdateProgressLog = $"âŒ Errore: {ex.Message}";
+            StatusText = $"âŒ Errore aggiornamento: {ex.Message}";
         }
         finally
         {
@@ -1127,7 +1127,7 @@ public partial class MainViewModel : ViewModelBase
 
             OnPropertyChanged(nameof(IsCurrentNumberWatched));
             OnPropertyChanged(nameof(WatchedStatusBadge));
-            StatusText = $"✔ {unit} {num} removed from \"{title}\" history.";
+            StatusText = $"âœ” {unit} {num} removed from \"{title}\" history.";
 
             if ((ActiveTab == "History" || ActiveTab == "Cronologia") && SelectedItem.Count == 0)
             {
@@ -1152,7 +1152,7 @@ public partial class MainViewModel : ViewModelBase
             await _cliService.ClearAllHistoryAsync();
             Items.Clear();
             SelectedItem = null;
-            StatusText = "✔ All history has been successfully cleared.";
+            StatusText = "âœ” All history has been successfully cleared.";
         };
         IsConfirmDialogVisible = true;
     }
@@ -1175,7 +1175,7 @@ public partial class MainViewModel : ViewModelBase
                 {
                     Items.Remove(SelectedItem);
                     SelectedItem = null;
-                    StatusText = $"✔ Deleted \"{title}\" from disk.";
+                    StatusText = $"âœ” Deleted \"{title}\" from disk.";
                 }
                 else
                 {
@@ -1227,7 +1227,7 @@ public partial class MainViewModel : ViewModelBase
                 Items.Remove(SelectedItem);
             }
             SelectedItem = null;
-            StatusText = $"✔ \"{title}\" completely removed from history.";
+            StatusText = $"âœ” \"{title}\" completely removed from history.";
         }
         else
         {
@@ -1256,15 +1256,15 @@ public partial class MainViewModel : ViewModelBase
                     var targetFile = videoFiles.FirstOrDefault(f => f.Contains($"{num}")) ?? videoFiles.FirstOrDefault();
                     if (targetFile != null)
                     {
-                        var psi = new ProcessStartInfo
+                        var launched = MangaCliService.LaunchVideo(targetFile, $"{SelectedItem.Title} (Episode {num} - Offline)");
+                        if (launched)
                         {
-                            FileName = MangaCliService.ResolveMpvPath(),
-                            Arguments = $"\"{targetFile}\" --title=\"{SelectedItem.Title} (Episode {num} - Offline)\"",
-                            UseShellExecute = false
-                        };
-                        MangaCliService.PassDisplayEnv(psi);
-                        Process.Start(psi);
-                        StatusText = $"Playing offline: {SelectedItem.Title} ({Path.GetFileName(targetFile)})";
+                            StatusText = $"Playing offline: {SelectedItem.Title} ({Path.GetFileName(targetFile)})";
+                        }
+                        else
+                        {
+                            StatusText = $"Could not launch video player for: {Path.GetFileName(targetFile)}";
+                        }
                         return;
                     }
                 }
@@ -1272,15 +1272,15 @@ public partial class MainViewModel : ViewModelBase
                 {
                     var subDirs = Directory.GetDirectories(SelectedItem.LocalPath);
                     var targetDir = subDirs.FirstOrDefault(d => d.Contains($"{num}")) ?? subDirs.FirstOrDefault() ?? SelectedItem.LocalPath;
-                    var psi = new ProcessStartInfo
+                    var launched = MangaCliService.LaunchMangaReader(targetDir, $"{SelectedItem.Title} (Chapter {num} - Offline)");
+                    if (launched)
                     {
-                        FileName = MangaCliService.ResolveMpvPath(),
-                        Arguments = $"\"{targetDir}\" --image-display-duration=inf --title=\"{SelectedItem.Title} (Chapter {num} - Offline)\"",
-                        UseShellExecute = false
-                    };
-                    MangaCliService.PassDisplayEnv(psi);
-                    Process.Start(psi);
-                    StatusText = $"Reading offline: {SelectedItem.Title} ({Path.GetFileName(targetDir)})";
+                        StatusText = $"Reading offline: {SelectedItem.Title} ({Path.GetFileName(targetDir)})";
+                    }
+                    else
+                    {
+                        StatusText = $"Could not open manga reader for: {Path.GetFileName(targetDir)}";
+                    }
                     return;
                 }
             }

@@ -269,7 +269,7 @@ public class MangaCliService
         var s = raw.Trim().ToLowerInvariant();
         if (s == "all" || s.Contains("all languages") || s.Contains("tutte le lingue")) return "all";
 
-        // Match explicit code in parentheses, e.g. "Italiano (IT)" -> "it", "Português (PT-BR)" -> "pt-br"
+        // Match explicit code in parentheses, e.g. "Italiano (IT)" -> "it", "PortuguÃªs (PT-BR)" -> "pt-br"
         var m = Regex.Match(s, @"\(([a-z\-]+)\)\s*$");
         if (m.Success)
         {
@@ -278,19 +278,19 @@ public class MangaCliService
 
         if (s.Contains("italiano") || s.Contains("italian") || s == "it") return "it";
         if (s.Contains("english") || s.Contains("inglese") || s == "en") return "en";
-        if (s.Contains("español") || s.Contains("spanish") || s.Contains("spagnolo") || s == "es") return "es";
-        if (s.Contains("français") || s.Contains("french") || s.Contains("francese") || s == "fr") return "fr";
+        if (s.Contains("espaÃ±ol") || s.Contains("spanish") || s.Contains("spagnolo") || s == "es") return "es";
+        if (s.Contains("franÃ§ais") || s.Contains("french") || s.Contains("francese") || s == "fr") return "fr";
         if (s.Contains("deutsch") || s.Contains("german") || s.Contains("tedesco") || s == "de") return "de";
         if (s.Contains("portugu") || s == "pt" || s == "pt-br") return "pt-br";
-        if (s.Contains("русский") || s.Contains("russian") || s.Contains("russo") || s == "ru") return "ru";
-        if (s.Contains("日本語") || s.Contains("japanese") || s.Contains("giapponese") || s == "ja") return "ja";
-        if (s.Contains("العربية") || s.Contains("arabic") || s == "ar") return "ar";
+        if (s.Contains("Ñ€ÑƒÑÑÐºÐ¸Ð¹") || s.Contains("russian") || s.Contains("russo") || s == "ru") return "ru";
+        if (s.Contains("æ—¥æœ¬èªž") || s.Contains("japanese") || s.Contains("giapponese") || s == "ja") return "ja";
+        if (s.Contains("Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©") || s.Contains("arabic") || s == "ar") return "ar";
         if (s.Contains("polski") || s.Contains("polish") || s == "pl") return "pl";
-        if (s.Contains("türkçe") || s.Contains("turkish") || s == "tr") return "tr";
+        if (s.Contains("tÃ¼rkÃ§e") || s.Contains("turkish") || s == "tr") return "tr";
         if (s.Contains("indonesian") || s == "id") return "id";
-        if (s.Contains("việt") || s.Contains("vietnamese") || s == "vi") return "vi";
-        if (s.Contains("한국어") || s.Contains("korean") || s == "ko") return "ko";
-        if (s.Contains("中文") || s.Contains("chinese") || s == "zh") return "zh";
+        if (s.Contains("viá»‡t") || s.Contains("vietnamese") || s == "vi") return "vi";
+        if (s.Contains("í•œêµ­ì–´") || s.Contains("korean") || s == "ko") return "ko";
+        if (s.Contains("ä¸­æ–‡") || s.Contains("chinese") || s == "zh") return "zh";
 
         return s;
     }
@@ -564,13 +564,13 @@ public class MangaCliService
                 (dest != null && (File.Exists(dest) || Directory.Exists(dest))))
             {
                 var unit = isManga ? "Chapter" : "Episode";
-                return (true, $"✔ Download complete: {item.Title} ({unit} {number})", dest);
+                return (true, $"âœ” Download complete: {item.Title} ({unit} {number})", dest);
             }
 
             if (output.Contains("already exists") || output.Contains("100%"))
             {
                 var unit = isManga ? "Chapter" : "Episode";
-                return (true, $"✔ Already downloaded: {item.Title} ({unit} {number})", dest);
+                return (true, $"âœ” Already downloaded: {item.Title} ({unit} {number})", dest);
             }
 
             return (false, $"Download completed with message: {output.Trim()}", dest);
@@ -999,29 +999,21 @@ public class MangaCliService
             {
                 var trimmedUrl = streamUrl.Trim();
                 var referrer = GetReferrerForPages(new List<string> { trimmedUrl }, src);
-                var refArg = !string.IsNullOrWhiteSpace(referrer) ? $"--referrer=\"{referrer}\"" : "";
-                var uaArg = "--user-agent=\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36\"";
+                var launched = LaunchVideo(trimmedUrl, $"{item.Title} - Episode {episode}", referrer);
 
-                var mpvPsi = new ProcessStartInfo
+                if (launched)
                 {
-                    FileName = ResolveMpvPath(),
-                    Arguments = $"\"{trimmedUrl}\" --title=\"{EscapeArg(item.Title)} - Episode {episode}\" {refArg} {uaArg} --force-window=immediate",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = false,
-                    RedirectStandardError = false,
-                    CreateNoWindow = false
-                };
-                PassDisplayEnv(mpvPsi);
-                Process.Start(mpvPsi);
+                    if (!item.WatchedNumbers.Contains(episode))
+                    {
+                        item.WatchedNumbers.Add(episode);
+                        item.WatchedNumbers.Sort();
+                        item.UpdateWatchedSummary();
+                    }
 
-                if (!item.WatchedNumbers.Contains(episode))
-                {
-                    item.WatchedNumbers.Add(episode);
-                    item.WatchedNumbers.Sort();
-                    item.UpdateWatchedSummary();
+                    return (true, $"Playing: {item.Title} (Episode {episode})");
                 }
 
-                return (true, $"Playing: {item.Title} (Episode {episode})");
+                return (false, "Could not launch video player (MPV, VLC or system player).");
             }
 
             return (false, "Could not extract video stream URL for this episode.");
@@ -1108,29 +1100,21 @@ public class MangaCliService
                 await File.WriteAllLinesAsync(playlistFile, pages);
 
                 var referrer = GetReferrerForPages(pages, src);
-                var refArg = !string.IsNullOrWhiteSpace(referrer) ? $"--referrer=\"{referrer}\"" : "";
-                var uaArg = "--user-agent=\"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36\"";
+                var launched = LaunchMangaReader(playlistFile, $"{item.Title} - Chapter {chapter}", referrer);
 
-                var mpvPsi = new ProcessStartInfo
+                if (launched)
                 {
-                    FileName = ResolveMpvPath(),
-                    Arguments = $"--title=\"{EscapeArg(item.Title)} - Chapter {chapter}\" --image-display-duration=inf {refArg} {uaArg} --playlist=\"{playlistFile}\"",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = false,
-                    RedirectStandardError = false,
-                    CreateNoWindow = false
-                };
-                PassDisplayEnv(mpvPsi);
-                Process.Start(mpvPsi);
+                    if (!item.WatchedNumbers.Contains(chapter))
+                    {
+                        item.WatchedNumbers.Add(chapter);
+                        item.WatchedNumbers.Sort();
+                        item.UpdateWatchedSummary();
+                    }
 
-                if (!item.WatchedNumbers.Contains(chapter))
-                {
-                    item.WatchedNumbers.Add(chapter);
-                    item.WatchedNumbers.Sort();
-                    item.UpdateWatchedSummary();
+                    return (true, $"Reader opened: {item.Title} (Chapter {chapter} - {pages.Count} pages)");
                 }
 
-                return (true, $"Reader opened: {item.Title} (Chapter {chapter} - {pages.Count} pages)");
+                return (false, "Could not open manga reader.");
             }
 
             return (false, "No pages found for this chapter.");
@@ -1209,7 +1193,7 @@ public class MangaCliService
         {
             var typeFlag = item.Type.ToLower() == "manga" ? "-m" : "-a";
             var output = await RunCommandAsync($"\"{item.Title}\" {typeFlag} --unmark {number}");
-            return output.Contains("✔ Unmarked", StringComparison.OrdinalIgnoreCase) || 
+            return output.Contains("âœ” Unmarked", StringComparison.OrdinalIgnoreCase) || 
                    output.Contains("Unmarked", StringComparison.OrdinalIgnoreCase);
         }
         catch
@@ -1241,7 +1225,7 @@ public class MangaCliService
         {
             var typeFlag = item.Type.ToLower() == "manga" ? "-m" : "-a";
             var output = await RunCommandAsync($"\"{item.Title}\" {typeFlag} --remove-history");
-            return output.Contains("✔ Successfully removed", StringComparison.OrdinalIgnoreCase) || 
+            return output.Contains("âœ” Successfully removed", StringComparison.OrdinalIgnoreCase) || 
                    output.Contains("removed", StringComparison.OrdinalIgnoreCase);
         }
         catch
@@ -1288,7 +1272,7 @@ public class MangaCliService
 
         foreach (var line in lines)
         {
-            var srcMatch = Regex.Match(line, @"📂\s*\[(.*?)\]");
+            var srcMatch = Regex.Match(line, @"ðŸ“‚\s*\[(.*?)\]");
             if (srcMatch.Success)
             {
                 currentSource = srcMatch.Groups[1].Value.Trim();
@@ -1421,4 +1405,131 @@ public class MangaCliService
         if (!string.IsNullOrEmpty(xdg)) psi.Environment["XDG_RUNTIME_DIR"] = xdg;
     }
 
+    public static string? ResolveVlcPath()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var p1 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "VideoLAN", "VLC", "vlc.exe");
+            if (File.Exists(p1)) return p1;
+            var p2 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "VideoLAN", "VLC", "vlc.exe");
+            if (File.Exists(p2)) return p2;
+            var p3 = @"C:\Program Files\VideoLAN\VLC\vlc.exe";
+            if (File.Exists(p3)) return p3;
+            var p4 = @"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe";
+            if (File.Exists(p4)) return p4;
+        }
+        else
+        {
+            if (File.Exists("/usr/bin/vlc")) return "/usr/bin/vlc";
+        }
+        return null;
+    }
+
+    public static bool LaunchVideo(string urlOrPath, string title, string? referrer = null, string? userAgent = null)
+    {
+        var ua = !string.IsNullOrWhiteSpace(userAgent) ? userAgent : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
+        // 1. Priorit: MPV player
+        try
+        {
+            var mpvPath = ResolveMpvPath();
+            var refArg = !string.IsNullOrWhiteSpace(referrer) ? $"--referrer=\"{referrer}\"" : "";
+            var uaArg = $"--user-agent=\"{ua}\"";
+            var mpvPsi = new ProcessStartInfo
+            {
+                FileName = mpvPath,
+                Arguments = $"\"{urlOrPath}\" --title=\"{EscapeArg(title)}\" {refArg} {uaArg} --force-window=immediate",
+                UseShellExecute = false,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
+                CreateNoWindow = false
+            };
+            PassDisplayEnv(mpvPsi);
+            var p = Process.Start(mpvPsi);
+            if (p != null) return true;
+        }
+        catch { }
+
+        // 2. Fallback su VLC Media Player (firmato digitalmente da VideoLAN, consentito da Smart App Control)
+        try
+        {
+            var vlcPath = ResolveVlcPath();
+            if (!string.IsNullOrWhiteSpace(vlcPath) && File.Exists(vlcPath))
+            {
+                var refArg = !string.IsNullOrWhiteSpace(referrer) ? $"--http-referrer=\"{referrer}\"" : "";
+                var uaArg = $"--http-user-agent=\"{ua}\"";
+                var vlcPsi = new ProcessStartInfo
+                {
+                    FileName = vlcPath,
+                    Arguments = $"\"{urlOrPath}\" --meta-title=\"{EscapeArg(title)}\" {refArg} {uaArg}",
+                    UseShellExecute = false
+                };
+                PassDisplayEnv(vlcPsi);
+                var p = Process.Start(vlcPsi);
+                if (p != null) return true;
+            }
+        }
+        catch { }
+
+        // 3. Fallback sul riproduttore / browser di sistema predefinito
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = urlOrPath,
+                UseShellExecute = true
+            });
+            return true;
+        }
+        catch { }
+
+        return false;
+    }
+
+    public static bool LaunchMangaReader(string playlistOrPath, string title, string? referrer = null, string? userAgent = null)
+    {
+        var ua = !string.IsNullOrWhiteSpace(userAgent) ? userAgent : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
+        // 1. Priorit: MPV player per rendering fluido delle pagine
+        try
+        {
+            var mpvPath = ResolveMpvPath();
+            var refArg = !string.IsNullOrWhiteSpace(referrer) ? $"--referrer=\"{referrer}\"" : "";
+            var uaArg = $"--user-agent=\"{ua}\"";
+            var mpvPsi = new ProcessStartInfo
+            {
+                FileName = mpvPath,
+                Arguments = $"--title=\"{EscapeArg(title)}\" --image-display-duration=inf {refArg} {uaArg} --playlist=\"{playlistOrPath}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
+                CreateNoWindow = false
+            };
+            PassDisplayEnv(mpvPsi);
+            var p = Process.Start(mpvPsi);
+            if (p != null) return true;
+        }
+        catch { }
+
+        // 2. Se MPV non  disponibile o bloccato, apri la directory con il visualizzatore immagini di sistema
+        try
+        {
+            var targetToOpen = playlistOrPath;
+            if (File.Exists(playlistOrPath) && playlistOrPath.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase))
+            {
+                var dir = Path.GetDirectoryName(playlistOrPath);
+                if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir)) targetToOpen = dir;
+            }
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = targetToOpen,
+                UseShellExecute = true
+            });
+            return true;
+        }
+        catch { }
+
+        return false;
+    }
 }
