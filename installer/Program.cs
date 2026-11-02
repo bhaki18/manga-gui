@@ -15,6 +15,9 @@ class Program
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
 
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool DeleteFileW(string lpFileName);
+
     const uint MB_OK = 0x00000000;
     const uint MB_ICONINFORMATION = 0x00000040;
     const uint MB_ICONWARNING = 0x00000030;
@@ -66,14 +69,23 @@ class Program
 
             var targetExe = Path.Combine(installDir, "MangaGui.exe");
             var iconPath = Path.Combine(installDir, "manga-gui.ico");
+            if (!File.Exists(iconPath))
+            {
+                var altIcon = Path.Combine(installDir, "Assets", "manga-gui.ico");
+                if (File.Exists(altIcon)) iconPath = altIcon;
+                else iconPath = targetExe;
+            }
 
-            // 2. Controllo e installazione automatica dipendenze di sistema (Visual C++ 2015-2022 x64)
+            // 2. Rimuove restrizioni di sicurezza Windows Defender (Zone.Identifier)
+            UnblockDirectory(installDir);
+
+            // 3. Controllo e installazione automatica dipendenze di sistema (Visual C++ 2015-2022 x64)
             EnsureSystemDependencies(installDir);
 
-            // 3. Verifica dipendenze runtime (Node, Curl, MPV, CLI)
+            // 4. Verifica dipendenze runtime (Node, Curl, MPV, CLI)
             var (depsOk, depMsg) = VerifyRuntimeDependencies(installDir);
 
-            // 4. Crea collegamento Desktop
+            // 5. Crea collegamento Desktop
             var desktopDir = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
             if (!string.IsNullOrEmpty(desktopDir) && Directory.Exists(desktopDir))
             {
@@ -81,7 +93,7 @@ class Program
                 CreateShortcut(desktopShortcut, targetExe, installDir, iconPath, "Manga GUI - Downloader, Streamer e Reader");
             }
 
-            // 5. Crea collegamento Menu Start
+            // 6. Crea collegamento Menu Start
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             var startMenuDir = Path.Combine(appData, "Microsoft", "Windows", "Start Menu", "Programs");
             if (Directory.Exists(startMenuDir))
@@ -90,7 +102,7 @@ class Program
                 CreateShortcut(startShortcut, targetExe, installDir, iconPath, "Manga GUI - Downloader, Streamer e Reader");
             }
 
-            // 6. Registra disinstallazione nel Registro di Windows
+            // 7. Registra disinstallazione nel Registro di Windows
             var displayVersion = "1.0.0-2";
             try
             {
@@ -124,9 +136,9 @@ class Program
             if (!isSilent)
             {
                 var msg = $"Installazione di Manga GUI v{displayVersion} completata con successo!\n\n" +
-                          "• Dipendenze di sistema (Visual C++, Node, MPV, cURL): Verificate e pronte\n" +
-                          "• Icona Manga GUI creata sul Desktop\n" +
-                          "• Collegamento aggiunto al Menu Start\n\n" +
+                          "â€¢ Dipendenze di sistema (Visual C++, Node, MPV, cURL): Verificate e pronte\n" +
+                          "â€¢ Icona Manga GUI creata sul Desktop\n" +
+                          "â€¢ Collegamento aggiunto al Menu Start\n\n" +
                           "Clicca OK per avviare Manga GUI.";
 
                 MessageBoxW(IntPtr.Zero, msg, "Manga GUI Setup", MB_OK | MB_ICONINFORMATION);
@@ -145,7 +157,7 @@ class Program
         }
         catch (Exception ex)
         {
-            MessageBoxW(IntPtr.Zero, $"Si è verificato un errore durante l'installazione:\n{ex.Message}", "Errore Installazione", MB_OK | MB_ICONERROR);
+            MessageBoxW(IntPtr.Zero, $"Si Ã¨ verificato un errore durante l'installazione:\n{ex.Message}", "Errore Installazione", MB_OK | MB_ICONERROR);
         }
     }
 
@@ -173,7 +185,7 @@ class Program
         {
             if (IsVcRedistInstalled())
             {
-                // Già installato: rimuovi il setup temporaneo per risparmiare spazio
+                // GiÃ  installato: rimuovi il setup temporaneo per risparmiare spazio
                 var vcBundled = Path.Combine(installDir, "vc_redist.x64.exe");
                 if (File.Exists(vcBundled))
                 {
@@ -186,7 +198,7 @@ class Program
             var vcPath = Path.Combine(installDir, "vc_redist.x64.exe");
             if (!File.Exists(vcPath))
             {
-                // Se non è incluso, scaricalo da Microsoft
+                // Se non Ã¨ incluso, scaricalo da Microsoft
                 try
                 {
                     using var client = new System.Net.Http.HttpClient();
@@ -295,6 +307,7 @@ class Program
                 shortcut.IconLocation = $"{iconPath},0";
                 shortcut.Description = description;
                 shortcut.Save();
+                UnblockFile(shortcutPath);
                 return;
             }
         }
@@ -303,7 +316,7 @@ class Program
         // Fallback PowerShell
         try
         {
-            var ps = $"$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('{shortcutPath}'); $s.TargetPath = '{targetPath}'; $s.WorkingDirectory = '{workingDirectory}'; $s.IconLocation = '{iconPath},0'; $s.Description = '{description}'; $s.Save()";
+            var ps = $"$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('{shortcutPath}'); $s.TargetPath = '{targetPath}'; $s.WorkingDirectory = '{workingDirectory}'; $s.IconLocation = '{iconPath},0'; $s.Description = '{description}'; $s.Save(); Unblock-File -Path '{shortcutPath}' -ErrorAction SilentlyContinue";
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell",
@@ -313,6 +326,34 @@ class Program
             };
             using var p = Process.Start(psi);
             p?.WaitForExit(3000);
+            UnblockFile(shortcutPath);
+        }
+        catch { }
+    }
+
+    static void UnblockFile(string filePath)
+    {
+        try
+        {
+            if (File.Exists(filePath))
+            {
+                DeleteFileW(filePath + ":Zone.Identifier");
+            }
+        }
+        catch { }
+    }
+
+    static void UnblockDirectory(string dirPath)
+    {
+        try
+        {
+            if (Directory.Exists(dirPath))
+            {
+                foreach (var file in Directory.EnumerateFiles(dirPath, "*", SearchOption.AllDirectories))
+                {
+                    UnblockFile(file);
+                }
+            }
         }
         catch { }
     }
