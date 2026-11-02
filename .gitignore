@@ -20,6 +20,7 @@ src/
 *.DotSettings.user
 
 installer/package.zip
+*.syso
 *.zip
 build-packages.sh
 publish-gh-pages.sh

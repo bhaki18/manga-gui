@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
@@ -493,13 +494,92 @@ public class UpdateService
             DeleteDirectorySafe(tempDir);
             Directory.CreateDirectory(tempDir);
 
-            var buildBatPath = Path.Combine(tempDir, "build-update.bat");
             var applyBatPath = Path.Combine(tempDir, "apply-update.bat");
-            var repoUrl = !string.IsNullOrWhiteSpace(updateInfo.RepoUrl) ? updateInfo.RepoUrl : DefaultRepoUrl;
             var installDir = AppContext.BaseDirectory.TrimEnd('\\', '/');
             var currentPid = Environment.ProcessId;
 
-            // 1. Script di download dipendenze + clone + compilazione (eseguito con progresso in tempo reale nella GUI)
+            // Tentativo 1: Download diretto del pacchetto ZIP precompilato (veloce, affidabile, zero dipendenze)
+            var zipUrls = new[]
+            {
+                "https://bhaki18.github.io/manga-cli/windows/manga-gui-windows.zip",
+                "https://raw.githubusercontent.com/bhaki18/manga-cli/gh-pages/windows/manga-gui-windows.zip",
+                "https://bhaki18.github.io/manga-cli/windows/manga-gui-win-x64.zip"
+            };
+
+            var zipPath = Path.Combine(tempDir, "update.zip");
+            var outDir = Path.Combine(tempDir, "out");
+            bool zipDownloaded = false;
+
+            using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
+            {
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("MangaGui-Updater");
+                foreach (var url in zipUrls)
+                {
+                    try
+                    {
+                        onProgress?.Invoke($"[1/3] Scaricamento pacchetto precompilato v{updateInfo.RemoteVersion}...");
+                        using var res = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                        if (res.IsSuccessStatusCode)
+                        {
+                            await using (var fs = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                            {
+                                await res.Content.CopyToAsync(fs);
+                            }
+                            zipDownloaded = true;
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            if (zipDownloaded && File.Exists(zipPath))
+            {
+                onProgress?.Invoke("[2/3] Estrazione file aggiornati in corso...");
+                Directory.CreateDirectory(outDir);
+                ZipFile.ExtractToDirectory(zipPath, outDir, overwriteFiles: true);
+
+                var subFolder = Path.Combine(outDir, "manga-gui-win-x64");
+                var effectiveOutDir = Directory.Exists(subFolder) ? subFolder : outDir;
+
+                // Assicurati che version.json contenga la versione aggiornata
+                var verFile = Path.Combine(effectiveOutDir, "version.json");
+                if (!File.Exists(verFile))
+                {
+                    var verJson = $"{{\"version\": \"{updateInfo.RemoteVersion}\", \"releaseDate\": \"{DateTime.UtcNow:yyyy-MM-dd}\"}}";
+                    await File.WriteAllTextAsync(verFile, verJson);
+                }
+
+                onProgress?.Invoke("[3/3] Applicazione aggiornamento e riavvio Manga GUI...");
+
+                var applyBat = new StringBuilder();
+                applyBat.AppendLine("@echo off");
+                applyBat.AppendLine("timeout /t 2 /nobreak >nul");
+                applyBat.AppendLine($"taskkill /PID {currentPid} /F >nul 2>nul");
+                applyBat.AppendLine($"xcopy /E /I /Y \"{effectiveOutDir}\\*\" \"{installDir}\\\" >nul");
+                applyBat.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-ChildItem -Path '{installDir}' -Recurse | Unblock-File\" >nul 2>nul");
+                applyBat.AppendLine($"start \"\" \"{installDir}\\MangaGui.exe\"");
+                applyBat.AppendLine("exit /b 0");
+
+                await File.WriteAllTextAsync(applyBatPath, applyBat.ToString());
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c \"\"{applyBatPath}\"\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+
+                await Task.Delay(800);
+                Environment.Exit(0);
+                return (true, "Aggiornamento Windows completato.");
+            }
+
+            // Fallback: Compilazione da sorgente tramite Git se il download dello ZIP non è riuscito
+            var repoUrl = !string.IsNullOrWhiteSpace(updateInfo.RepoUrl) ? updateInfo.RepoUrl : DefaultRepoUrl;
+            var buildBatPath = Path.Combine(tempDir, "build-update.bat");
+
             var buildBat = new StringBuilder();
             buildBat.AppendLine("@echo off");
             buildBat.AppendLine("setlocal EnableDelayedExpansion");
@@ -514,11 +594,6 @@ public class UpdateService
             buildBat.AppendLine($"  cd /d \"{tempDir}\\src\" && git fetch --depth 1 origin main && git reset --hard origin/main");
             buildBat.AppendLine(") else (");
             buildBat.AppendLine($"  if exist \"{tempDir}\\src\" rmdir /s /q \"{tempDir}\\src\" 2>nul");
-            buildBat.AppendLine($"  git clone --depth 1 \"{repoUrl}\" \"{tempDir}\\src\"");
-            buildBat.AppendLine(")");
-            buildBat.AppendLine("if errorlevel 1 (");
-            buildBat.AppendLine("  echo Fallback pulizia e nuovo clone...");
-            buildBat.AppendLine($"  rmdir /s /q \"{tempDir}\\src\" 2>nul");
             buildBat.AppendLine($"  git clone --depth 1 \"{repoUrl}\" \"{tempDir}\\src\"");
             buildBat.AppendLine(")");
             buildBat.AppendLine("if errorlevel 1 exit /b 1");
@@ -536,17 +611,16 @@ public class UpdateService
 
             await File.WriteAllTextAsync(buildBatPath, buildBat.ToString());
 
-            // 2. Script di sostituzione file (attende la chiusura di MangaGui.exe perchÃ© Windows blocca i file .exe in esecuzione) e riavvio
-            var applyBat = new StringBuilder();
-            applyBat.AppendLine("@echo off");
-            applyBat.AppendLine("timeout /t 2 /nobreak >nul");
-            applyBat.AppendLine($"taskkill /PID {currentPid} /F >nul 2>nul");
-            applyBat.AppendLine($"xcopy /E /I /Y \"{tempDir}\\out\\*\" \"{installDir}\\\" >nul");
-            applyBat.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-ChildItem -Path '{installDir}' -Recurse | Unblock-File\" >nul 2>nul");
-            applyBat.AppendLine($"start \"\" \"{installDir}\\MangaGui.exe\"");
-            applyBat.AppendLine("exit /b 0");
+            var applyBatFallback = new StringBuilder();
+            applyBatFallback.AppendLine("@echo off");
+            applyBatFallback.AppendLine("timeout /t 2 /nobreak >nul");
+            applyBatFallback.AppendLine($"taskkill /PID {currentPid} /F >nul 2>nul");
+            applyBatFallback.AppendLine($"xcopy /E /I /Y \"{tempDir}\\out\\*\" \"{installDir}\\\" >nul");
+            applyBatFallback.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-ChildItem -Path '{installDir}' -Recurse | Unblock-File\" >nul 2>nul");
+            applyBatFallback.AppendLine($"start \"\" \"{installDir}\\MangaGui.exe\"");
+            applyBatFallback.AppendLine("exit /b 0");
 
-            await File.WriteAllTextAsync(applyBatPath, applyBat.ToString());
+            await File.WriteAllTextAsync(applyBatPath, applyBatFallback.ToString());
 
             var psi = new ProcessStartInfo
             {
@@ -561,17 +635,11 @@ public class UpdateService
             using var proc = new Process { StartInfo = psi };
             proc.OutputDataReceived += (_, e) =>
             {
-                if (!string.IsNullOrWhiteSpace(e.Data))
-                {
-                    onProgress?.Invoke(e.Data.Trim());
-                }
+                if (!string.IsNullOrWhiteSpace(e.Data)) onProgress?.Invoke(e.Data.Trim());
             };
             proc.ErrorDataReceived += (_, e) =>
             {
-                if (!string.IsNullOrWhiteSpace(e.Data))
-                {
-                    onProgress?.Invoke(e.Data.Trim());
-                }
+                if (!string.IsNullOrWhiteSpace(e.Data)) onProgress?.Invoke(e.Data.Trim());
             };
 
             proc.Start();
@@ -581,7 +649,7 @@ public class UpdateService
 
             if (proc.ExitCode == 0)
             {
-                onProgress?.Invoke("âœ” Aggiornamento Windows pronto! Riavvio in corso...");
+                onProgress?.Invoke("✔ Aggiornamento Windows pronto! Riavvio in corso...");
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
@@ -594,7 +662,7 @@ public class UpdateService
                 return (true, "Aggiornamento Windows completato.");
             }
 
-            return (false, $"La compilazione dell'aggiornamento Windows Ã¨ terminata con codice {proc.ExitCode}.");
+            return (false, $"L'aggiornamento Windows è terminato con codice {proc.ExitCode}.");
         }
         catch (Exception ex)
         {
