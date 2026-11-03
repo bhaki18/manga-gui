@@ -344,7 +344,7 @@ public class UpdateService
             sb.AppendLine("    run_privileged xbps-install -Sy git curl nodejs npm mpv || true");
             sb.AppendLine("  fi");
             sb.AppendLine("else");
-            sb.AppendLine("  echo \"[STEP 1/4] Tutte le dipendenze (git, curl, node, npm, mpv, dotnet) sono giÃ  installate.\"");
+            sb.AppendLine("  echo \"[STEP 1/4] Tutte le dipendenze (git, curl, node, npm, mpv, dotnet) sono già installate.\"");
             sb.AppendLine("fi");
             sb.AppendLine("");
             sb.AppendLine("echo \"[STEP 2/4] Download dell'ultima versione ($REMOTE_VER) dal repository...\"");
@@ -457,13 +457,13 @@ public class UpdateService
 
             if (proc.ExitCode == 0)
             {
-                onProgress?.Invoke("âœ” Aggiornamento completato! Riavvio dell'applicazione in corso...");
+                onProgress?.Invoke("✔ Aggiornamento completato! Riavvio dell'applicazione in corso...");
                 await Task.Delay(900);
                 Environment.Exit(0);
                 return (true, "Aggiornamento completato con successo.");
             }
 
-            return (false, $"L'aggiornamento Ã¨ terminato con codice {proc.ExitCode}.");
+            return (false, $"L'aggiornamento è terminato con codice {proc.ExitCode}.");
         }
         catch (Exception ex)
         {

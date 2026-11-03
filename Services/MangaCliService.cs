@@ -160,6 +160,8 @@ public class MangaCliService
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true
         };
@@ -269,7 +271,7 @@ public class MangaCliService
         var s = raw.Trim().ToLowerInvariant();
         if (s == "all" || s.Contains("all languages") || s.Contains("tutte le lingue")) return "all";
 
-        // Match explicit code in parentheses, e.g. "Italiano (IT)" -> "it", "PortuguÃªs (PT-BR)" -> "pt-br"
+        // Match explicit code in parentheses, e.g. "Italiano (IT)" -> "it", "Português (PT-BR)" -> "pt-br"
         var m = Regex.Match(s, @"\(([a-z\-]+)\)\s*$");
         if (m.Success)
         {
@@ -278,19 +280,19 @@ public class MangaCliService
 
         if (s.Contains("italiano") || s.Contains("italian") || s == "it") return "it";
         if (s.Contains("english") || s.Contains("inglese") || s == "en") return "en";
-        if (s.Contains("espaÃ±ol") || s.Contains("spanish") || s.Contains("spagnolo") || s == "es") return "es";
-        if (s.Contains("franÃ§ais") || s.Contains("french") || s.Contains("francese") || s == "fr") return "fr";
+        if (s.Contains("español") || s.Contains("espaÃ±ol") || s.Contains("spanish") || s.Contains("spagnolo") || s == "es") return "es";
+        if (s.Contains("français") || s.Contains("franÃ§ais") || s.Contains("french") || s.Contains("francese") || s == "fr") return "fr";
         if (s.Contains("deutsch") || s.Contains("german") || s.Contains("tedesco") || s == "de") return "de";
         if (s.Contains("portugu") || s == "pt" || s == "pt-br") return "pt-br";
-        if (s.Contains("Ñ€ÑƒÑÑÐºÐ¸Ð¹") || s.Contains("russian") || s.Contains("russo") || s == "ru") return "ru";
-        if (s.Contains("æ—¥æœ¬èªž") || s.Contains("japanese") || s.Contains("giapponese") || s == "ja") return "ja";
-        if (s.Contains("Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©") || s.Contains("arabic") || s == "ar") return "ar";
+        if (s.Contains("русский") || s.Contains("Ñ€ÑƒÑÑÐºÐ¸Ð¹") || s.Contains("Ð ÑƒÑÑÐºÐ¸Ð¹") || s.Contains("russian") || s.Contains("russo") || s == "ru") return "ru";
+        if (s.Contains("日本語") || s.Contains("æ—¥æœ¬èªž") || s.Contains("japanese") || s.Contains("giapponese") || s == "ja") return "ja";
+        if (s.Contains("العربية") || s.Contains("Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©") || s.Contains("arabic") || s == "ar") return "ar";
         if (s.Contains("polski") || s.Contains("polish") || s == "pl") return "pl";
-        if (s.Contains("tÃ¼rkÃ§e") || s.Contains("turkish") || s == "tr") return "tr";
+        if (s.Contains("türkçe") || s.Contains("tÃ¼rkÃ§e") || s.Contains("turkish") || s == "tr") return "tr";
         if (s.Contains("indonesian") || s == "id") return "id";
-        if (s.Contains("viá»‡t") || s.Contains("vietnamese") || s == "vi") return "vi";
-        if (s.Contains("í•œêµ­ì–´") || s.Contains("korean") || s == "ko") return "ko";
-        if (s.Contains("ä¸­æ–‡") || s.Contains("chinese") || s == "zh") return "zh";
+        if (s.Contains("tiếng việt") || s.Contains("việt") || s.Contains("viá»‡t") || s.Contains("vietnamese") || s == "vi") return "vi";
+        if (s.Contains("한국어") || s.Contains("í•œêµ­ì–´") || s.Contains("korean") || s == "ko") return "ko";
+        if (s.Contains("中文") || s.Contains("ä¸­æ–‡") || s.Contains("chinese") || s == "zh") return "zh";
 
         return s;
     }
@@ -564,13 +566,13 @@ public class MangaCliService
                 (dest != null && (File.Exists(dest) || Directory.Exists(dest))))
             {
                 var unit = isManga ? "Chapter" : "Episode";
-                return (true, $"âœ” Download complete: {item.Title} ({unit} {number})", dest);
+                return (true, $"✔ Download complete: {item.Title} ({unit} {number})", dest);
             }
 
             if (output.Contains("already exists") || output.Contains("100%"))
             {
                 var unit = isManga ? "Chapter" : "Episode";
-                return (true, $"âœ” Already downloaded: {item.Title} ({unit} {number})", dest);
+                return (true, $"✔ Already downloaded: {item.Title} ({unit} {number})", dest);
             }
 
             return (false, $"Download completed with message: {output.Trim()}", dest);
@@ -1193,7 +1195,7 @@ public class MangaCliService
         {
             var typeFlag = item.Type.ToLower() == "manga" ? "-m" : "-a";
             var output = await RunCommandAsync($"\"{item.Title}\" {typeFlag} --unmark {number}");
-            return output.Contains("âœ” Unmarked", StringComparison.OrdinalIgnoreCase) || 
+            return output.Contains("✔ Unmarked", StringComparison.OrdinalIgnoreCase) || output.Contains("âœ” Unmarked", StringComparison.OrdinalIgnoreCase) || 
                    output.Contains("Unmarked", StringComparison.OrdinalIgnoreCase);
         }
         catch
@@ -1225,7 +1227,7 @@ public class MangaCliService
         {
             var typeFlag = item.Type.ToLower() == "manga" ? "-m" : "-a";
             var output = await RunCommandAsync($"\"{item.Title}\" {typeFlag} --remove-history");
-            return output.Contains("âœ” Successfully removed", StringComparison.OrdinalIgnoreCase) || 
+            return output.Contains("✔ Successfully removed", StringComparison.OrdinalIgnoreCase) || output.Contains("âœ” Successfully removed", StringComparison.OrdinalIgnoreCase) || 
                    output.Contains("removed", StringComparison.OrdinalIgnoreCase);
         }
         catch
@@ -1272,7 +1274,7 @@ public class MangaCliService
 
         foreach (var line in lines)
         {
-            var srcMatch = Regex.Match(line, @"ðŸ“‚\s*\[(.*?)\]");
+            var srcMatch = Regex.Match(line, @"(?:📂|📁|ðŸ“‚)\s*\[(.*?)\]");
             if (srcMatch.Success)
             {
                 currentSource = srcMatch.Groups[1].Value.Trim();

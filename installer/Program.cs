@@ -157,7 +157,7 @@ class Program
         }
         catch (Exception ex)
         {
-            MessageBoxW(IntPtr.Zero, $"Si Ã¨ verificato un errore durante l'installazione:\n{ex.Message}", "Errore Installazione", MB_OK | MB_ICONERROR);
+            MessageBoxW(IntPtr.Zero, $"Si è verificato un errore durante l'installazione:\n{ex.Message}", "Errore Installazione", MB_OK | MB_ICONERROR);
         }
     }
 
@@ -185,7 +185,7 @@ class Program
         {
             if (IsVcRedistInstalled())
             {
-                // GiÃ  installato: rimuovi il setup temporaneo per risparmiare spazio
+                // Già installato: rimuovi il setup temporaneo per risparmiare spazio
                 var vcBundled = Path.Combine(installDir, "vc_redist.x64.exe");
                 if (File.Exists(vcBundled))
                 {
@@ -198,7 +198,7 @@ class Program
             var vcPath = Path.Combine(installDir, "vc_redist.x64.exe");
             if (!File.Exists(vcPath))
             {
-                // Se non Ã¨ incluso, scaricalo da Microsoft
+                // Se non è incluso, scaricalo da Microsoft
                 try
                 {
                     using var client = new System.Net.Http.HttpClient();

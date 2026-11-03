@@ -42,7 +42,7 @@ public partial class MainViewModel : ViewModelBase
     public string AppVersionText => $"manga-gui {InstalledVersionText}";
     public bool HasUpdateNotes => !string.IsNullOrWhiteSpace(UpdateNotesText);
     public bool HasUpdateProgress => !string.IsNullOrWhiteSpace(UpdateProgressLog);
-    public string UpdateConfirmButtonText => IsUpdating ? "â³ Aggiornamento in corso..." : "âš¡ Aggiorna Ora (Scarica & Compila)";
+    public string UpdateConfirmButtonText => IsUpdating ? "⏳ Aggiornamento in corso..." : "⚡ Aggiorna Ora (Scarica & Compila)";
 
     [ObservableProperty]
     private string _activeTab = "Anime";
@@ -125,13 +125,13 @@ public partial class MainViewModel : ViewModelBase
     private Func<Task>? _pendingConfirmAsyncAction;
 
     public string ActionButtonText => SelectedItem?.IsDownloaded == true
-        ? (SelectedItem?.Type.ToLower() == "manga" ? "ðŸ“– READ OFFLINE" : "â–¶ PLAY OFFLINE")
-        : (SelectedItem?.Type.ToLower() == "manga" ? "ðŸ“– READ NOW" : "â–¶ START WATCHING");
+        ? (SelectedItem?.Type.ToLower() == "manga" ? "📖 READ OFFLINE" : "▶ PLAY OFFLINE")
+        : (SelectedItem?.Type.ToLower() == "manga" ? "📖 READ NOW" : "▶ START WATCHING");
     public string NumberLabel => SelectedItem?.Type.ToLower() == "manga" ? "Chapter:" : "Episode:";
 
     public bool IsCurrentNumberWatched => SelectedItem != null && SelectedItem.WatchedNumbers != null && SelectedItem.WatchedNumbers.Contains((int)SelectedNumber);
-    public string WatchedStatusBadge => IsCurrentNumberWatched ? (SelectedItem?.Type.ToLower() == "manga" ? "âœ” READ" : "âœ” WATCHED") : "";
-    public string UnmarkButtonText => SelectedItem?.Type.ToLower() == "manga" ? "âœ• Unmark as read" : "âœ• Unmark as watched";
+    public string WatchedStatusBadge => IsCurrentNumberWatched ? (SelectedItem?.Type.ToLower() == "manga" ? "✔ READ" : "✔ WATCHED") : "";
+    public string UnmarkButtonText => SelectedItem?.Type.ToLower() == "manga" ? "✕ Unmark as read" : "✕ Unmark as watched";
 
     public string AnimeTabColor => ActiveTab == "Anime" ? "#FF640A" : "#D0D0D0";
     public string MangaTabColor => ActiveTab == "Manga" ? "#FF640A" : "#D0D0D0";
@@ -244,30 +244,30 @@ public partial class MainViewModel : ViewModelBase
                 "All Audio (Sub & Dub)",
                 "Sub (Subtitled / Sottotitolato)",
                 "Dub (Dubbed / Doppiato)",
-                "ðŸ’¬ Solo Sub",
-                "ðŸŽ™ï¸ Solo Dub"
+                "💬 Solo Sub",
+                "🎙️ Solo Dub"
             );
         }
 
         var upper = code.ToUpperInvariant();
         var (flag, subDesc, dubDesc) = code switch
         {
-            "it" => ("ðŸ‡®ðŸ‡¹", "Sottotitolato", "Doppiato"),
-            "en" => ("ðŸ‡¬ðŸ‡§", "Subtitled", "Dubbed"),
-            "es" => ("ðŸ‡ªðŸ‡¸", "Subtitulado", "Doblado"),
-            "fr" => ("ðŸ‡«ðŸ‡·", "Sous-titrÃ©", "DoublÃ©"),
-            "de" => ("ðŸ‡©ðŸ‡ª", "Untertitelt", "Synchronisiert"),
-            "pt-br" => ("ðŸ‡§ðŸ‡·", "Legendado", "Dublado"),
-            "ru" => ("ðŸ‡·ðŸ‡º", "Ð¡ÑƒÐ±Ñ‚Ð¸Ñ‚Ñ€Ñ‹", "Ð”ÑƒÐ±Ð»ÑÐ¶"),
-            "ja" => ("ðŸ‡¯ðŸ‡µ", "Subtitled", "Original / Dub"),
-            "ar" => ("ðŸ‡¸ðŸ‡¦", "Ù…ØªØ±Ø¬Ù…", "Ù…Ø¯Ø¨Ù„Ø¬"),
-            "pl" => ("ðŸ‡µðŸ‡±", "Napisy", "Dubbing"),
-            "tr" => ("ðŸ‡¹ðŸ‡·", "AltyazÄ±lÄ±", "Dublaj"),
-            "id" => ("ðŸ‡®ðŸ‡©", "Subtitle", "Dubbing"),
-            "vi" => ("ðŸ‡»ðŸ‡³", "Vietsub", "Thuyáº¿t minh"),
-            "ko" => ("ðŸ‡°ðŸ‡·", "ìžë§‰", "ë”ë¹™"),
-            "zh" => ("ðŸ‡¨ðŸ‡³", "å­—å¹•", "é…éŸ³"),
-            _ => ("ðŸŒ", "Subtitled", "Dubbed")
+            "it" => ("🇮🇹", "Sottotitolato", "Doppiato"),
+            "en" => ("🇬🇧", "Subtitled", "Dubbed"),
+            "es" => ("🇪🇸", "Subtitulado", "Doblado"),
+            "fr" => ("🇫🇷", "Sous-titré", "Doublé"),
+            "de" => ("🇩🇪", "Untertitelt", "Synchronisiert"),
+            "pt-br" => ("🇧🇷", "Legendado", "Dublado"),
+            "ru" => ("🇷🇺", "Субтитры", "Дубляж"),
+            "ja" => ("🇯🇵", "Subtitled", "Original / Dub"),
+            "ar" => ("🇸🇦", "مترجم", "مدبلج"),
+            "pl" => ("🇵🇱", "Napisy", "Dubbing"),
+            "tr" => ("🇹🇷", "Altyazılı", "Dublaj"),
+            "id" => ("🇮🇩", "Subtitle", "Dubbing"),
+            "vi" => ("🇻🇳", "Vietsub", "Thuyết minh"),
+            "ko" => ("🇰🇷", "자막", "더빙"),
+            "zh" => ("🇨🇳", "字幕", "配音"),
+            _ => ("🌐", "Subtitled", "Dubbed")
         };
 
         return (
@@ -317,19 +317,19 @@ public partial class MainViewModel : ViewModelBase
         "All languages",
         "Italiano (IT)",
         "English (EN)",
-        "EspaÃ±ol (ES)",
-        "FranÃ§ais (FR)",
+        "Español (ES)",
+        "Français (FR)",
         "Deutsch (DE)",
-        "PortuguÃªs (PT-BR)",
-        "Ð ÑƒÑÑÐºÐ¸Ð¹ (RU)",
-        "æ—¥æœ¬èªž (JA)",
-        "Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© (AR)",
+        "Português (PT-BR)",
+        "Русский (RU)",
+        "日本語 (JA)",
+        "العربية (AR)",
         "Polski (PL)",
-        "TÃ¼rkÃ§e (TR)",
+        "Türkçe (TR)",
         "Indonesian (ID)",
-        "Tiáº¿ng Viá»‡t (VI)",
-        "í•œêµ­ì–´ (KO)",
-        "ä¸­æ–‡ (ZH)"
+        "Tiếng Việt (VI)",
+        "한국어 (KO)",
+        "中文 (ZH)"
     };
 
     private bool _isUpdatingSources;
@@ -407,13 +407,13 @@ public partial class MainViewModel : ViewModelBase
                 UpdateNotesText = check.ReleaseNotes;
                 UpdateProgressLog = string.Empty;
                 IsUpdateDialogVisible = true;
-                StatusText = $"ðŸš€ Nuova versione disponibile: v{check.RemoteVersion} (installata: v{check.InstalledVersion})";
+                StatusText = $"🚀 Nuova versione disponibile: v{check.RemoteVersion} (installata: v{check.InstalledVersion})";
             }
             else if (isManual)
             {
                 if (check.CheckSucceeded)
                 {
-                    StatusText = $"âœ” Nessun aggiornamento necessario: hai giÃ  l'ultima versione installata (v{check.InstalledVersion}).";
+                    StatusText = $"✔ Nessun aggiornamento necessario: hai già l'ultima versione installata (v{check.InstalledVersion}).";
                 }
                 else
                 {
@@ -1127,7 +1127,7 @@ public partial class MainViewModel : ViewModelBase
 
             OnPropertyChanged(nameof(IsCurrentNumberWatched));
             OnPropertyChanged(nameof(WatchedStatusBadge));
-            StatusText = $"âœ” {unit} {num} removed from \"{title}\" history.";
+            StatusText = $"✔ {unit} {num} removed from \"{title}\" history.";
 
             if ((ActiveTab == "History" || ActiveTab == "Cronologia") && SelectedItem.Count == 0)
             {
@@ -1152,7 +1152,7 @@ public partial class MainViewModel : ViewModelBase
             await _cliService.ClearAllHistoryAsync();
             Items.Clear();
             SelectedItem = null;
-            StatusText = "âœ” All history has been successfully cleared.";
+            StatusText = "✔ All history has been successfully cleared.";
         };
         IsConfirmDialogVisible = true;
     }
@@ -1175,7 +1175,7 @@ public partial class MainViewModel : ViewModelBase
                 {
                     Items.Remove(SelectedItem);
                     SelectedItem = null;
-                    StatusText = $"âœ” Deleted \"{title}\" from disk.";
+                    StatusText = $"✔ Deleted \"{title}\" from disk.";
                 }
                 else
                 {
@@ -1227,7 +1227,7 @@ public partial class MainViewModel : ViewModelBase
                 Items.Remove(SelectedItem);
             }
             SelectedItem = null;
-            StatusText = $"âœ” \"{title}\" completely removed from history.";
+            StatusText = $"✔ \"{title}\" completely removed from history.";
         }
         else
         {
