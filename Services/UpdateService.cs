@@ -21,6 +21,8 @@ public class UpdateCheckResult
     public string ReleaseNotes { get; set; } = string.Empty;
     public string RepoUrl { get; set; } = "https://github.com/bhaki18/manga-gui.git";
     public string ArchPackageUrl { get; set; } = string.Empty;
+    public string DebPackageUrl { get; set; } = string.Empty;
+    public string LinuxTarballUrl { get; set; } = string.Empty;
     public string? ErrorMessage { get; set; }
 }
 
@@ -178,6 +180,8 @@ public class UpdateService
         string bestNotes = "";
         string bestRepoUrl = DefaultRepoUrl;
         string bestArchPkgUrl = "";
+        string bestDebPkgUrl = "";
+        string bestTarballUrl = "";
 
         // 1. Check remote version.json endpoints
         foreach (var baseUrl in RemoteVersionJsonUrls)
@@ -215,6 +219,10 @@ public class UpdateService
                             bestRepoUrl = rProp.GetString()!;
                         if (root.TryGetProperty("archPackageUrl", out var aProp) && aProp.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(aProp.GetString()))
                             bestArchPkgUrl = aProp.GetString()!;
+                        if (root.TryGetProperty("debPackageUrl", out var dProp) && dProp.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(dProp.GetString()))
+                            bestDebPkgUrl = dProp.GetString()!;
+                        if (root.TryGetProperty("linuxTarballUrl", out var tProp) && tProp.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(tProp.GetString()))
+                            bestTarballUrl = tProp.GetString()!;
                     }
                 }
             }
@@ -251,6 +259,12 @@ public class UpdateService
             result.ArchPackageUrl = !string.IsNullOrWhiteSpace(bestArchPkgUrl)
                 ? bestArchPkgUrl
                 : $"https://raw.githubusercontent.com/bhaki18/manga-cli/gh-pages/x86_64/manga-gui-bin-{bestRemoteVersion}-x86_64.pkg.tar.zst";
+            result.DebPackageUrl = !string.IsNullOrWhiteSpace(bestDebPkgUrl)
+                ? bestDebPkgUrl
+                : $"https://raw.githubusercontent.com/bhaki18/manga-cli/gh-pages/manga-gui_{bestRemoteVersion}_amd64.deb";
+            result.LinuxTarballUrl = !string.IsNullOrWhiteSpace(bestTarballUrl)
+                ? bestTarballUrl
+                : "https://raw.githubusercontent.com/bhaki18/manga-cli/gh-pages/manga-gui-linux-x64.tar.gz";
             result.HasUpdate = IsRemoteNewer(installed, bestRemoteVersion);
         }
         else
@@ -284,6 +298,12 @@ public class UpdateService
             var archPkgUrl = !string.IsNullOrWhiteSpace(updateInfo.ArchPackageUrl)
                 ? updateInfo.ArchPackageUrl
                 : $"https://raw.githubusercontent.com/bhaki18/manga-cli/gh-pages/x86_64/manga-gui-bin-{updateInfo.RemoteVersion}-x86_64.pkg.tar.zst";
+            var debPkgUrl = !string.IsNullOrWhiteSpace(updateInfo.DebPackageUrl)
+                ? updateInfo.DebPackageUrl
+                : $"https://raw.githubusercontent.com/bhaki18/manga-cli/gh-pages/manga-gui_{updateInfo.RemoteVersion}_amd64.deb";
+            var tarPkgUrl = !string.IsNullOrWhiteSpace(updateInfo.LinuxTarballUrl)
+                ? updateInfo.LinuxTarballUrl
+                : "https://raw.githubusercontent.com/bhaki18/manga-cli/gh-pages/manga-gui-linux-x64.tar.gz";
 
             var sb = new StringBuilder();
             sb.AppendLine("#!/usr/bin/env bash");
@@ -292,6 +312,8 @@ public class UpdateService
             sb.AppendLine($"REPO_URL=\"{repoUrl}\"");
             sb.AppendLine($"REMOTE_VER=\"{updateInfo.RemoteVersion}\"");
             sb.AppendLine($"ARCH_PKG_URL=\"{archPkgUrl}\"");
+            sb.AppendLine($"DEB_PKG_URL=\"{debPkgUrl}\"");
+            sb.AppendLine($"TAR_PKG_URL=\"{tarPkgUrl}\"");
             sb.AppendLine($"IS_DEV_WORKSPACE={(isDevWorkspace ? "true" : "false")}");
             sb.AppendLine($"DEV_DIR=\"{currentDir}\"");
             sb.AppendLine($"IS_SYSTEM_INSTALL={(isSystemInstall ? "true" : "false")}");
@@ -319,100 +341,102 @@ public class UpdateService
             sb.AppendLine("  fi");
             sb.AppendLine("}");
             sb.AppendLine("");
-            sb.AppendLine("echo \"[STEP 1/4] Verifica dipendenze necessarie per l'aggiornamento (git, curl, nodejs, npm, mpv, dotnet)...\"");
-            sb.AppendLine("MISSING_PKGS=()");
-            sb.AppendLine("command -v git >/dev/null 2>&1 || MISSING_PKGS+=(\"git\")");
-            sb.AppendLine("command -v curl >/dev/null 2>&1 || MISSING_PKGS+=(\"curl\")");
-            sb.AppendLine("command -v node >/dev/null 2>&1 || MISSING_PKGS+=(\"nodejs\")");
-            sb.AppendLine("command -v npm >/dev/null 2>&1 || MISSING_PKGS+=(\"npm\")");
-            sb.AppendLine("command -v mpv >/dev/null 2>&1 || MISSING_PKGS+=(\"mpv\")");
-            sb.AppendLine("command -v dotnet >/dev/null 2>&1 || MISSING_PKGS+=(\"dotnet-sdk\")");
+            sb.AppendLine("UPDATED=false");
             sb.AppendLine("");
-            sb.AppendLine("if [ ${#MISSING_PKGS[@]} -gt 0 ]; then");
-            sb.AppendLine("  echo \"[STEP 1/4] Installazione dipendenze mancanti: ${MISSING_PKGS[*]}...\"");
-            sb.AppendLine("  if command -v pacman >/dev/null 2>&1; then");
-            sb.AppendLine("    run_privileged pacman -S --needed --noconfirm \"${MISSING_PKGS[@]}\" || true");
-            sb.AppendLine("  elif command -v apt-get >/dev/null 2>&1; then");
-            sb.AppendLine("    run_privileged bash -c \"apt-get update && apt-get install -y git curl nodejs npm mpv\" || true");
-            sb.AppendLine("  elif command -v dnf >/dev/null 2>&1; then");
-            sb.AppendLine("    run_privileged dnf install -y git curl nodejs npm mpv dotnet-sdk-10.0 || true");
-            sb.AppendLine("  elif command -v zypper >/dev/null 2>&1; then");
-            sb.AppendLine("    run_privileged zypper install -y git curl nodejs npm mpv || true");
-            sb.AppendLine("  elif command -v apk >/dev/null 2>&1; then");
-            sb.AppendLine("    run_privileged apk add git curl nodejs npm mpv || true");
-            sb.AppendLine("  elif command -v xbps-install >/dev/null 2>&1; then");
-            sb.AppendLine("    run_privileged xbps-install -Sy git curl nodejs npm mpv || true");
-            sb.AppendLine("  fi");
-            sb.AppendLine("else");
-            sb.AppendLine("  echo \"[STEP 1/4] Tutte le dipendenze (git, curl, node, npm, mpv, dotnet) sono già installate.\"");
-            sb.AppendLine("fi");
-            sb.AppendLine("");
-            sb.AppendLine("echo \"[STEP 2/4] Download dell'ultima versione ($REMOTE_VER) dal repository...\"");
-            sb.AppendLine("if [ \"$IS_DEV_WORKSPACE\" = \"true\" ] && [ -w \"$DEV_DIR\" ]; then");
-            sb.AppendLine("  BUILD_SRC=\"$DEV_DIR\"");
-            sb.AppendLine("  cd \"$BUILD_SRC\"");
-            sb.AppendLine("  git fetch origin || true");
-            sb.AppendLine("  git pull --ff-only || true");
-            sb.AppendLine("else");
-            sb.AppendLine("  rm -rf \"$WORK_DIR\"");
-            sb.AppendLine("  mkdir -p \"$(dirname \"$WORK_DIR\")\"");
-            sb.AppendLine("  git clone --depth 1 \"$REPO_URL\" \"$WORK_DIR\"");
-            sb.AppendLine("  BUILD_SRC=\"$WORK_DIR\"");
-            sb.AppendLine("  cd \"$BUILD_SRC\"");
-            sb.AppendLine("fi");
-            sb.AppendLine("");
-            sb.AppendLine("echo \"[STEP 3/4] Compilazione del progetto e delle dipendenze CLI...\"");
-            sb.AppendLine("if [ -d \"./cli\" ] && command -v npm >/dev/null 2>&1; then");
-            sb.AppendLine("  (cd ./cli && npm install --no-audit --no-fund)");
-            sb.AppendLine("fi");
-            sb.AppendLine("");
-            sb.AppendLine("COMPILED_OK=false");
-            sb.AppendLine("if command -v dotnet >/dev/null 2>&1; then");
-            sb.AppendLine("  if dotnet publish MangaGui.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o ./publish/linux-x64; then");
-            sb.AppendLine("    mkdir -p ./publish/linux-x64/cli/src");
-            sb.AppendLine("    cp -r ./cli/src/* ./publish/linux-x64/cli/src/");
-            sb.AppendLine("    if [ -f ./version.json ]; then cp -f ./version.json ./publish/linux-x64/version.json; fi");
-            sb.AppendLine("    chmod +x ./publish/linux-x64/MangaGui");
-            sb.AppendLine("    COMPILED_OK=true");
-            sb.AppendLine("  fi");
-            sb.AppendLine("fi");
-            sb.AppendLine("");
-            sb.AppendLine("echo \"[STEP 4/4] Installazione dell'aggiornamento e riavvio...\"");
-            sb.AppendLine("if command -v pacman >/dev/null 2>&1 && ( [ \"$IS_SYSTEM_INSTALL\" = \"true\" ] || pacman -Qi manga-gui-bin >/dev/null 2>&1 ); then");
-            sb.AppendLine("  PKG_INSTALLED=false");
-            sb.AppendLine("  if [ \"$COMPILED_OK\" = \"true\" ] && command -v makepkg >/dev/null 2>&1; then");
-            sb.AppendLine("    makepkg -f && PKG_FILE=$(ls -t manga-gui-bin-*.pkg.tar.zst 2>/dev/null | grep -v \"\\-debug\\-\" | head -n 1 || true)");
-            sb.AppendLine("    if [ -n \"$PKG_FILE\" ] && [ -f \"$PKG_FILE\" ]; then");
-            sb.AppendLine("      run_privileged pacman -U --noconfirm \"$BUILD_SRC/$PKG_FILE\" && PKG_INSTALLED=true");
+            sb.AppendLine("# 1. Arch Linux (pacman) - download pacchetto precompilato o pacman");
+            sb.AppendLine("if [ \"$UPDATED\" = \"false\" ] && command -v pacman >/dev/null 2>&1; then");
+            sb.AppendLine("  echo \"[STEP 1/3] Sistema Arch Linux rilevato. Aggiornamento pacchetto pacman...\"");
+            sb.AppendLine("  if [ -n \"$ARCH_PKG_URL\" ]; then");
+            sb.AppendLine("    echo \"Download pacchetto Arch ufficiale ($REMOTE_VER)...\"");
+            sb.AppendLine("    TMP_PKG=\"/tmp/manga-gui-bin-update.pkg.tar.zst\"");
+            sb.AppendLine("    if curl -fL --retry 3 -o \"$TMP_PKG\" \"$ARCH_PKG_URL\"; then");
+            sb.AppendLine("      run_privileged pacman -U --noconfirm \"$TMP_PKG\" && UPDATED=true");
+            sb.AppendLine("      rm -f \"$TMP_PKG\"");
             sb.AppendLine("    fi");
             sb.AppendLine("  fi");
-            sb.AppendLine("  if [ \"$PKG_INSTALLED\" = \"false\" ]; then");
-            sb.AppendLine("    echo \"[STEP 4/4] Scaricamento pacchetto precompilato Arch da GitHub Pages...\"");
-            sb.AppendLine("    TMP_PKG=\"/tmp/manga-gui-bin-update.pkg.tar.zst\"");
-            sb.AppendLine("    curl -L --fail -o \"$TMP_PKG\" \"$ARCH_PKG_URL\"");
-            sb.AppendLine("    run_privileged pacman -U --noconfirm \"$TMP_PKG\"");
+            sb.AppendLine("  if [ \"$UPDATED\" = \"false\" ]; then");
+            sb.AppendLine("    run_privileged pacman -Sy --noconfirm manga-gui-bin && UPDATED=true || true");
             sb.AppendLine("  fi");
-            sb.AppendLine("  echo \"[COMPLETATO] Riavvio di Manga GUI aggiornato...\"");
-            sb.AppendLine("  nohup /usr/bin/manga-gui >/dev/null 2>&1 &");
-            sb.AppendLine("elif [ \"$IS_SYSTEM_INSTALL\" = \"true\" ] && [ \"$COMPILED_OK\" = \"true\" ]; then");
-            sb.AppendLine("  echo \"[STEP 4/4] Aggiornamento installazione di sistema in /usr/lib/manga-gui...\"");
-            sb.AppendLine("  run_privileged bash -c \"mkdir -p /usr/lib/manga-gui && cp -rf '$BUILD_SRC/publish/linux-x64/.' /usr/lib/manga-gui/ && chmod +x /usr/lib/manga-gui/MangaGui\"");
-            sb.AppendLine("  echo \"[COMPLETATO] Riavvio di Manga GUI aggiornato...\"");
-            sb.AppendLine("  nohup /usr/bin/manga-gui >/dev/null 2>&1 &");
-            sb.AppendLine("elif [ \"$COMPILED_OK\" = \"true\" ]; then");
-            sb.AppendLine("  if [ -d \"$HOME/.local/lib/manga-gui\" ]; then");
-            sb.AppendLine("    echo \"[STEP 4/4] Aggiornamento installazione utente in $HOME/.local/lib/manga-gui...\"");
-            sb.AppendLine("    mkdir -p \"$HOME/.local/lib/manga-gui\"");
-            sb.AppendLine("    cp -rf \"$BUILD_SRC/publish/linux-x64/.\" \"$HOME/.local/lib/manga-gui/\"");
-            sb.AppendLine("    chmod +x \"$HOME/.local/lib/manga-gui/MangaGui\"");
-            sb.AppendLine("    echo \"[COMPLETATO] Riavvio di Manga GUI aggiornato...\"");
-            sb.AppendLine("    (nohup \"$HOME/.local/bin/manga-gui\" >/dev/null 2>&1 || nohup \"$HOME/.local/lib/manga-gui/MangaGui\" >/dev/null 2>&1) &");
+            sb.AppendLine("fi");
+            sb.AppendLine("");
+            sb.AppendLine("# 2. Debian / Ubuntu (.deb)");
+            sb.AppendLine("if [ \"$UPDATED\" = \"false\" ] && command -v dpkg >/dev/null 2>&1 && [ -n \"$DEB_PKG_URL\" ]; then");
+            sb.AppendLine("  echo \"[STEP 1/3] Sistema Debian/Ubuntu rilevato. Aggiornamento pacchetto .deb...\"");
+            sb.AppendLine("  TMP_DEB=\"/tmp/manga-gui-update.deb\"");
+            sb.AppendLine("  if curl -fL --retry 3 -o \"$TMP_DEB\" \"$DEB_PKG_URL\"; then");
+            sb.AppendLine("    (run_privileged dpkg -i \"$TMP_DEB\" || run_privileged apt-get install -f -y) && UPDATED=true");
+            sb.AppendLine("    rm -f \"$TMP_DEB\"");
+            sb.AppendLine("  fi");
+            sb.AppendLine("fi");
+            sb.AppendLine("");
+            sb.AppendLine("# 3. Tarball universale Linux");
+            sb.AppendLine("if [ \"$UPDATED\" = \"false\" ] && [ -n \"$TAR_PKG_URL\" ]; then");
+            sb.AppendLine("  echo \"[STEP 1/3] Download archivio universale Linux ($REMOTE_VER)...\"");
+            sb.AppendLine("  TMP_TAR=\"/tmp/manga-gui-linux.tar.gz\"");
+            sb.AppendLine("  TMP_EXTRACT=\"/tmp/manga-gui-update-extract\"");
+            sb.AppendLine("  if curl -fL --retry 3 -o \"$TMP_TAR\" \"$TAR_PKG_URL\"; then");
+            sb.AppendLine("    rm -rf \"$TMP_EXTRACT\" && mkdir -p \"$TMP_EXTRACT\"");
+            sb.AppendLine("    tar -xzf \"$TMP_TAR\" -C \"$TMP_EXTRACT\"");
+            sb.AppendLine("    TARGET_DIR=\"$TMP_EXTRACT/manga-gui-linux-x64\"");
+            sb.AppendLine("    if [ -f \"$TARGET_DIR/install.sh\" ]; then");
+            sb.AppendLine("      (cd \"$TARGET_DIR\" && run_privileged ./install.sh) && UPDATED=true");
+            sb.AppendLine("    fi");
+            sb.AppendLine("    rm -rf \"$TMP_EXTRACT\" \"$TMP_TAR\"");
+            sb.AppendLine("  fi");
+            sb.AppendLine("fi");
+            sb.AppendLine("");
+            sb.AppendLine("# 4. Fallback: compilazione locale da sorgenti garantendo la presenza di cli/node_modules");
+            sb.AppendLine("if [ \"$UPDATED\" = \"false\" ]; then");
+            sb.AppendLine("  echo \"[STEP 1/3] Compilazione locale di emergenza da sorgenti...\"");
+            sb.AppendLine("  if [ \"$IS_DEV_WORKSPACE\" = \"true\" ] && [ -w \"$DEV_DIR\" ]; then");
+            sb.AppendLine("    BUILD_SRC=\"$DEV_DIR\"");
+            sb.AppendLine("    cd \"$BUILD_SRC\"");
+            sb.AppendLine("    git fetch origin || true");
+            sb.AppendLine("    git pull --ff-only || true");
             sb.AppendLine("  else");
-            sb.AppendLine("    echo \"[COMPLETATO] Riavvio di Manga GUI dalla build aggiornata...\"");
-            sb.AppendLine("    nohup \"$BUILD_SRC/publish/linux-x64/MangaGui\" >/dev/null 2>&1 &");
+            sb.AppendLine("    rm -rf \"$WORK_DIR\"");
+            sb.AppendLine("    mkdir -p \"$(dirname \"$WORK_DIR\")\"");
+            sb.AppendLine("    git clone --depth 1 \"$REPO_URL\" \"$WORK_DIR\"");
+            sb.AppendLine("    BUILD_SRC=\"$WORK_DIR\"");
+            sb.AppendLine("    cd \"$BUILD_SRC\"");
             sb.AppendLine("  fi");
+            sb.AppendLine("  echo \"[STEP 2/3] Installazione dipendenze CLI e compilazione...\"");
+            sb.AppendLine("  if [ -d \"./cli\" ] && command -v npm >/dev/null 2>&1; then");
+            sb.AppendLine("    (cd ./cli && npm install --no-audit --no-fund)");
+            sb.AppendLine("  fi");
+            sb.AppendLine("  if command -v dotnet >/dev/null 2>&1; then");
+            sb.AppendLine("    if dotnet publish MangaGui.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o ./publish/linux-x64; then");
+            sb.AppendLine("      mkdir -p ./publish/linux-x64/cli/src");
+            sb.AppendLine("      cp -r ./cli/src/* ./publish/linux-x64/cli/src/");
+            sb.AppendLine("      if [ -d ./cli/node_modules ]; then");
+            sb.AppendLine("        cp -rf ./cli/node_modules ./publish/linux-x64/cli/");
+            sb.AppendLine("      fi");
+            sb.AppendLine("      cp -f ./cli/package*.json ./publish/linux-x64/cli/ 2>/dev/null || true");
+            sb.AppendLine("      if [ -f ./version.json ]; then cp -f ./version.json ./publish/linux-x64/version.json; fi");
+            sb.AppendLine("      chmod +x ./publish/linux-x64/MangaGui");
+            sb.AppendLine("      if command -v pacman >/dev/null 2>&1 && command -v makepkg >/dev/null 2>&1; then");
+            sb.AppendLine("        makepkg -f && PKG_FILE=$(ls -t manga-gui-bin-*.pkg.tar.zst 2>/dev/null | grep -v \"\\-debug\\-\" | head -n 1 || true)");
+            sb.AppendLine("        if [ -n \"$PKG_FILE\" ] && [ -f \"$PKG_FILE\" ]; then");
+            sb.AppendLine("          run_privileged pacman -U --noconfirm \"$BUILD_SRC/$PKG_FILE\" && UPDATED=true");
+            sb.AppendLine("        fi");
+            sb.AppendLine("      elif [ \"$IS_SYSTEM_INSTALL\" = \"true\" ]; then");
+            sb.AppendLine("        run_privileged bash -c \"mkdir -p /usr/lib/manga-gui && cp -rf '$BUILD_SRC/publish/linux-x64/.' /usr/lib/manga-gui/ && chmod +x /usr/lib/manga-gui/MangaGui\" && UPDATED=true");
+            sb.AppendLine("      else");
+            sb.AppendLine("        mkdir -p \"$HOME/.local/lib/manga-gui\"");
+            sb.AppendLine("        cp -rf \"$BUILD_SRC/publish/linux-x64/.\" \"$HOME/.local/lib/manga-gui/\"");
+            sb.AppendLine("        chmod +x \"$HOME/.local/lib/manga-gui/MangaGui\"");
+            sb.AppendLine("        UPDATED=true");
+            sb.AppendLine("      fi");
+            sb.AppendLine("    fi");
+            sb.AppendLine("  fi");
+            sb.AppendLine("fi");
+            sb.AppendLine("");
+            sb.AppendLine("if [ \"$UPDATED\" = \"true\" ]; then");
+            sb.AppendLine("  echo \"[STEP 3/3] Riavvio di Manga GUI aggiornato...\"");
+            sb.AppendLine("  (nohup /usr/bin/manga-gui >/dev/null 2>&1 || nohup \"$HOME/.local/bin/manga-gui\" >/dev/null 2>&1 || nohup \"$HOME/.local/lib/manga-gui/MangaGui\" >/dev/null 2>&1) &");
+            sb.AppendLine("  exit 0");
             sb.AppendLine("else");
-            sb.AppendLine("  echo \"Errore: impossibile completare la compilazione o l'installazione.\"");
+            sb.AppendLine("  echo \"Errore: impossibile completare l'aggiornamento automatico.\"");
             sb.AppendLine("  exit 1");
             sb.AppendLine("fi");
 

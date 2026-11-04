@@ -42,7 +42,7 @@ public partial class MainViewModel : ViewModelBase
     public string AppVersionText => $"manga-gui {InstalledVersionText}";
     public bool HasUpdateNotes => !string.IsNullOrWhiteSpace(UpdateNotesText);
     public bool HasUpdateProgress => !string.IsNullOrWhiteSpace(UpdateProgressLog);
-    public string UpdateConfirmButtonText => IsUpdating ? "⏳ Aggiornamento in corso..." : "⚡ Aggiorna Ora (Scarica & Compila)";
+    public string UpdateConfirmButtonText => IsUpdating ? "⏳ Aggiornamento in corso..." : "⚡ Aggiorna Ora";
 
     [ObservableProperty]
     private string _activeTab = "Anime";
