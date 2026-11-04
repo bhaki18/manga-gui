@@ -3,7 +3,7 @@ bin/
 obj/
 publish/
 pkg/
-src/
+/src/
 *.pkg.tar.zst
 *.deb
 *.tar.gz
