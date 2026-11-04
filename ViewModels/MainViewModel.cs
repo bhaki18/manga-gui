@@ -64,7 +64,7 @@ public partial class MainViewModel : ViewModelBase
 
     public string DownloadedTabColor => (ActiveTab == "Downloaded" || ActiveTab == "Downloads") ? "#FF640A" : "#D0D0D0";
     public bool IsDownloadedTabActive => ActiveTab == "Downloaded" || ActiveTab == "Downloads";
-    public string DownloadIconText => IsDownloading ? "â³" : "â¬‡";
+    public string DownloadIconText => IsDownloading ? "⏳" : "⬇";
     public string DownloadButtonText => IsDownloading ? (!string.IsNullOrWhiteSpace(DownloadProgressText) ? $"DOWNLOADING ({DownloadProgressText})" : "DOWNLOADING...") : "DOWNLOAD";
 
 
@@ -163,7 +163,7 @@ public partial class MainViewModel : ViewModelBase
                 parts.Add($"Audio: {SelectedAudioFilter}");
             if (!string.IsNullOrWhiteSpace(SelectedSource) && SelectedSource != "All sources")
                 parts.Add($"Source: {MangaCliService.FormatSourceName(SelectedSource)}");
-            return string.Join("  â€¢  ", parts);
+            return string.Join("  •  ", parts);
         }
     }
 
@@ -417,7 +417,7 @@ public partial class MainViewModel : ViewModelBase
                 }
                 else
                 {
-                    StatusText = $"âš ï¸ {check.ErrorMessage ?? "Impossibile verificare gli aggiornamenti online."}";
+                    StatusText = $"⚠️ {check.ErrorMessage ?? "Impossibile verificare gli aggiornamenti online."}";
                 }
             }
         }
@@ -458,14 +458,14 @@ public partial class MainViewModel : ViewModelBase
 
             if (!success)
             {
-                UpdateProgressLog = $"âŒ {msg}";
-                StatusText = $"âŒ {msg}";
+                UpdateProgressLog = $"❌ {msg}";
+                StatusText = $"❌ {msg}";
             }
         }
         catch (Exception ex)
         {
-            UpdateProgressLog = $"âŒ Errore: {ex.Message}";
-            StatusText = $"âŒ Errore aggiornamento: {ex.Message}";
+            UpdateProgressLog = $"❌ Errore: {ex.Message}";
+            StatusText = $"❌ Errore aggiornamento: {ex.Message}";
         }
         finally
         {

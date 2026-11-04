@@ -136,9 +136,9 @@ class Program
             if (!isSilent)
             {
                 var msg = $"Installazione di Manga GUI v{displayVersion} completata con successo!\n\n" +
-                          "â€¢ Dipendenze di sistema (Visual C++, Node, MPV, cURL): Verificate e pronte\n" +
-                          "â€¢ Icona Manga GUI creata sul Desktop\n" +
-                          "â€¢ Collegamento aggiunto al Menu Start\n\n" +
+                          "• Dipendenze di sistema (Visual C++, Node, MPV, cURL): Verificate e pronte\n" +
+                          "• Icona Manga GUI creata sul Desktop\n" +
+                          "• Collegamento aggiunto al Menu Start\n\n" +
                           "Clicca OK per avviare Manga GUI.";
 
                 MessageBoxW(IntPtr.Zero, msg, "Manga GUI Setup", MB_OK | MB_ICONINFORMATION);
