@@ -1,130 +1,85 @@
-# 🎬 Manga GUI - Modern Desktop Manga & Anime Hub
+# 🎬 Manga GUI - Modern Desktop Manga & Anime Hub (Windows)
 
-**Manga GUI** è un'interfaccia grafica desktop moderna, cross-platform e ultra-reattiva scritta in **C#** con **Avalonia UI** (v12) e pattern **MVVM**, progettata per offrire un'esperienza fluida e accattivante su **Linux** e **Windows** per guardare anime e leggere manga sia online che offline.
+**Manga GUI** is a modern, ultra-responsive Windows desktop client built with **C#**, **Avalonia UI** (v12), and the **MVVM** pattern, designed for streaming anime and reading manga online and offline.
 
----
-
-## 🐧 Installazione su Linux
-
-Manga GUI supporta nativamente tutte le distribuzioni Linux grazie ai diversi formati di pacchetto e all'installer universale.
-
-### 🟠 Debian, Ubuntu, Linux Mint, Pop!_OS (.deb)
-Scarica o genera il pacchetto `.deb` e installalo con:
-```bash
-sudo apt update
-sudo apt install ./publish/manga-gui_1.1.4-1_amd64.deb
-```
-oppure con `dpkg`:
-```bash
-sudo dpkg -i manga-gui_1.1.4-1_amd64.deb
-sudo apt install -f
-```
+> 🐧 **Linux User?** Head over to the dedicated repository for Linux packages (Arch Linux, Debian/Ubuntu, and Universal Tarball): [manga-gui-linux](https://github.com/bhaki18/manga-gui-linux).
+> 📱 **Android User?** Head over to the dedicated repository for Android mobile: [manga-gui-mobile](https://github.com/bhaki18/manga-gui-mobile).
 
 ---
 
-### 🔵 Arch Linux / Manjaro / EndeavourOS (.pkg.tar.zst)
-Installa direttamente il pacchetto Pacman precompilato:
-```bash
-sudo pacman -U manga-gui-bin-1.1.4-1-x86_64.pkg.tar.zst
-```
-oppure compila dal sorgente con `makepkg`:
-```bash
-git clone https://github.com/bhaki18/manga-gui.git
-cd manga-gui
-makepkg -si
-```
+## 🪟 Installation on Windows
+
+### Option 1: Native Setup Installer (Recommended)
+Download `MangaGui-Setup.exe` from the latest release or website:
+1. Run `MangaGui-Setup.exe`.
+2. Follow the setup wizard to install into your local user programs.
+3. Launch **Manga GUI** from your Start Menu or Desktop shortcut!
+
+### Option 2: Portable ZIP
+Download `manga-gui-windows.zip`:
+1. Extract the `.zip` archive anywhere on your disk.
+2. Double-click `MangaGui.exe` to run.
 
 ---
 
-### 🟢 Fedora, openSUSE, Alpine, Void e Altre Distro (Installer Universale)
-Scarica l'archivio universale `manga-gui-linux-x64.tar.gz` o clona il repository, quindi esegui:
-```bash
-# Installazione per tutto il sistema (consigliata)
-sudo ./install.sh
+## ⌨️ Command Line Usage (`MangaGui.exe [flags]`)
 
-# Oppure installazione utente locale senza permessi di root
-./install.sh
-```
-L'installer rileva automaticamente il gestore pacchetti di sistema (`apt`, `dnf`, `zypper`, `pacman`, `apk`, `xbps`), installa le dipendenze (`mpv`, `node`, `npm`, `git`, `curl`), registra il comando `manga-gui` e aggiunge l'icona nel menu delle applicazioni.
-
-Per disinstallare in qualsiasi momento:
-```bash
-./uninstall.sh
-```
-
----
-
-## ⌨️ Utilizzo da Riga di Comando (`manga-gui --FLAGS`)
-
-Una volta installato, puoi lanciare `manga-gui` direttamente da terminale o specificare opzioni:
+You can launch Manga GUI with custom startup options:
 
 ```bash
-# Avvio normale (apre la schermata Anime predefinita)
-manga-gui
+# Standard startup
+MangaGui.exe
 
-# Apri direttamente la sezione Manga
-manga-gui --manga
-# oppure
-manga-gui -m
+# Open directly into Manga section
+MangaGui.exe --manga
+MangaGui.exe -m
 
-# Apri direttamente la sezione Anime
-manga-gui --anime
-# oppure
-manga-gui -a
+# Open directly into Anime section
+MangaGui.exe --anime
+MangaGui.exe -a
 
-# Apri direttamente i contenuti scaricati offline
-manga-gui --downloaded
-# oppure
-manga-gui -d
+# Open offline downloads
+MangaGui.exe --downloaded
+MangaGui.exe -d
 
-# Cerca subito un titolo (anime o manga)
-manga-gui -q "One Piece"
-manga-gui --search "Berserk"
+# Search for a title immediately
+MangaGui.exe -q "One Piece"
+MangaGui.exe --search "Berserk"
 
-# Apri la cronologia degli episodi visti e capitoli letti
-manga-gui -H
-manga-gui --history
+# Open watch/read history
+MangaGui.exe -H
+MangaGui.exe --history
 
-# Visualizza la guida ai comandi
-manga-gui --help
-
-# Visualizza la versione installata
-manga-gui --version
+# Help and Version
+MangaGui.exe --help
+MangaGui.exe --version
 ```
 
 ---
 
-## 🪟 Pacchetto e Build per Windows (Standalone `.exe`)
+## 🛠️ Building From Source
 
-Per creare una versione standalone per Windows a 64-bit:
+### Prerequisites
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download)
+- [Node.js (LTS)](https://nodejs.org/) & `npm`
+- [Go](https://go.dev/) (optional, required only to build `MangaGui-Setup.exe`)
+- `git`
+
+### Build Command
 ```bash
-dotnet publish MangaGui.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ./publish/win-x64
+./build-packages.sh
 ```
-Troverai l'eseguibile autonomo pronto all'uso in:
-`./publish/win-x64/MangaGui.exe` (con la cartella `cli/` inclusa accanto).
+This generates:
+- Standalone single-file binary in `publish/win-x64/MangaGui.exe`
+- Standalone setup installer in `publish/win-x64/MangaGui-Setup.exe`
+- Portable distribution archive in `publish/manga-gui-windows.zip`
 
 ---
 
-## ✨ Funzionalità
-
-* 🎨 **Tema Scuro Nativo (Fluent Dark)**: Interfaccia raffinata con accenti arancioni e scuri, schede responsive e animazioni fluide.
-* 🎬 **Anime Hub**: Navigazione e ricerca rapida nel catalogo con badge audio dinamici (`ITA`, `SUB ITA`, `ITA / SUB`).
-* 📖 **Manga Hub**: Sfoglia migliaia di volumi con filtri lingua, generi e fallback intelligente multi-provider (One Piece Power, MangaDex, Mangapill).
-* ⬇️ **Download Offline**: Scarica episodi anime e capitoli manga in locale (`~/.config/manga-gui/Downloaded/`) per visualizzarli anche senza connessione internet.
-* ⚡ **Streaming e Lettura con MPV**: Riproduzione fluida a pieno schermo con gestione intelligente del referer per ogni provider e playlist automatica.
-* 📜 **Cronologia e Segna come Visto/Letto**: Tracciamento dei capitoli ed episodi con intervalli compatti e menu di gestione con conferma.
+## 🔄 Auto-Updater
+Manga GUI includes a built-in silent/assisted updater. When a new version is published to GitHub Pages, the application prompts you to update and seamlessly replaces files and restarts the app.
 
 ---
 
-## 🛠️ Tecnologie Utilizzate
-
-* **Linguaggio**: C# (.NET 10)
-* **UI Framework**: [Avalonia UI](https://avaloniaui.net/) (v12)
-* **Architettura**: MVVM con `CommunityToolkit.Mvvm`
-* **Player / Viewer**: [MPV](https://mpv.io/)
-* **Motore dati**: Integrazione asincrona con `manga-cli`
-
----
-
-## 📜 Licenza
-Rilasciato sotto licenza [GPL-3.0-or-later](LICENSE).
+## 📄 License
+This project is licensed under the GPL-3.0 License.

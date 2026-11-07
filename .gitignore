@@ -2,14 +2,10 @@
 bin/
 obj/
 publish/
-pkg/
 /src/
-*.pkg.tar.zst
-*.deb
-*.tar.gz
-.deb-build-tmp/
 *.pdb
-*.deb
+*.zip
+*.syso
 
 # IDE and tooling
 *.user
@@ -19,9 +15,6 @@ pkg/
 .vscode/
 *.DotSettings.user
 
-installer/package.zip
-*.syso
-*.zip
-build-packages.sh
-publish-gh-pages.sh
+# Temp
 .gh-pages-tmp/
+installer/package.zip
