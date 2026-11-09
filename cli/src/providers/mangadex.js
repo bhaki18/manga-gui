@@ -112,7 +112,7 @@ class MangaDexProvider extends BaseProvider {
       const cleanQuery = encodeURIComponent(query.trim());
       const langParam = this._buildLangParam('availableTranslatedLanguage', lang);
       const genreParam = this._buildGenreParam(filters);
-      const url = `${this.baseUrl}/manga?title=${cleanQuery}&limit=25&hasAvailableChapters=true${langParam}${genreParam}&includes[]=author&order[relevance]=desc`;
+      const url = `${this.baseUrl}/manga?title=${cleanQuery}&limit=25&hasAvailableChapters=true${langParam}${genreParam}&includes[]=author&includes[]=cover_art&order[relevance]=desc`;
       const res = await fetchJson(url);
 
       if (!res || !Array.isArray(res.data)) return [];
@@ -137,7 +137,7 @@ class MangaDexProvider extends BaseProvider {
         ? this._buildLangParam('availableTranslatedLanguage', langKey)
         : '&availableTranslatedLanguage[]=it&availableTranslatedLanguage[]=en';
       const genreParam = this._buildGenreParam(filters);
-      const url = `${this.baseUrl}/manga?limit=80&order[followedCount]=desc&hasAvailableChapters=true${langParam}${genreParam}&includes[]=author`;
+      const url = `${this.baseUrl}/manga?limit=80&order[followedCount]=desc&hasAvailableChapters=true${langParam}${genreParam}&includes[]=author&includes[]=cover_art`;
       const res = await fetchJson(url);
       if (!res || !Array.isArray(res.data)) return [];
       const list = res.data.map(item => this._extractMangaItem(item, lang));

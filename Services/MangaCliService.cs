@@ -446,6 +446,8 @@ public class MangaCliService
 
                 var url = elem.TryGetProperty("url", out var uProp) && uProp.ValueKind == JsonValueKind.String
                     ? uProp.GetString() : null;
+                var image = elem.TryGetProperty("image", out var imgProp) && imgProp.ValueKind == JsonValueKind.String
+                    ? imgProp.GetString() : null;
                 var id = elem.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.String
                     ? idProp.GetString() : (url ?? title);
                 var rawSource = elem.TryGetProperty("source", out var sProp) && sProp.ValueKind == JsonValueKind.String
@@ -476,6 +478,7 @@ public class MangaCliService
                     Id = id ?? title,
                     Title = title,
                     Url = url,
+                    Image = image,
                     Type = type,
                     Source = normSource,
                     SourceName = displaySourceName,

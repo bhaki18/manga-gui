@@ -42,11 +42,14 @@ function createMangaWorldProvider({ BaseMangaProvider, cheerio, fetchHtml }) {
           .get()
           .filter(Boolean)
           .join(', ');
+        const img = $(el).find('img').first().attr('src') || $(el).find('img').first().attr('data-src');
+        const fullImg = img ? (img.startsWith('http') ? img : `${this.baseUrl}${img}`) : null;
 
         results.push({
           id: pathKey,
           title,
           url: fullUrl,
+          image: fullImg,
           author: author || '',
           genres: genres || '',
           language: 'it',

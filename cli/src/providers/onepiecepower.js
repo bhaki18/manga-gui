@@ -130,30 +130,36 @@ class OnePiecePowerProvider extends BaseProvider {
       return true;
     });
 
-    const popular = [];
+    const popularMain = [];
+    const popularSpinOffs = [];
     const rest = [];
 
     for (const item of filtered) {
-      const t = item.title.toLowerCase();
+      const t = item.title.toLowerCase().trim();
       const alt = (item.altTitle || '').toLowerCase();
-      const isPop = POPULAR_MANGA_KEYWORDS.some(k => t === k || t.startsWith(k + ' ') || t.includes(k) || alt.includes(k));
-      if (isPop) {
-        popular.push(item);
+      const isExactMain = POPULAR_MANGA_KEYWORDS.some(k => t === k || t === `${k} (english edition)`);
+      const isPop = isExactMain || POPULAR_MANGA_KEYWORDS.some(k => t.startsWith(k + ' ') || t.includes(k) || alt.includes(k));
+      if (isExactMain) {
+        popularMain.push(item);
+      } else if (isPop) {
+        popularSpinOffs.push(item);
       } else {
         rest.push(item);
       }
     }
 
-    // Sort popular by keyword order
-    popular.sort((a, b) => {
+    const sortByKeyword = (a, b) => {
       const ta = a.title.toLowerCase();
       const tb = b.title.toLowerCase();
       const ia = POPULAR_MANGA_KEYWORDS.findIndex(k => ta === k || ta.includes(k));
       const ib = POPULAR_MANGA_KEYWORDS.findIndex(k => tb === k || tb.includes(k));
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
-    });
+    };
 
-    return [...popular, ...rest].slice(0, 100);
+    popularMain.sort(sortByKeyword);
+    popularSpinOffs.sort(sortByKeyword);
+
+    return [...popularMain, ...popularSpinOffs, ...rest].slice(0, 100);
   }
 
   /**
